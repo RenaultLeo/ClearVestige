@@ -1,0 +1,119 @@
+name: Build, Self-Test & Release (Windows)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Tag de release à créer (optionnel, ex: v1.4.0). Laisser vide pour un simple build CI."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-test:
+    name: Compilation C# / WPF & Auto-Test
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout du code source
+        uses: actions/checkout@v4
+
+      - name: Vérification de l'icône multi-tailles (app.ico)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "assets\app.ico")) {
+            Write-Host "Génération de assets\app.ico..."
+            powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\make_icon.ps1
+          } else {
+            Write-Host "Icône présente : assets\app.ico ($((Get-Item 'assets\app.ico').Length) octets)"
+          }
+
+      - name: Compilation de DeepUninstaller.exe (.NET Framework 4.x natif)
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
+          if (-not (Test-Path ".\DeepUninstaller.exe")) {
+            throw "DeepUninstaller.exe n'a pas été généré."
+          }
+
+      - name: Exécution de l'Auto-Test de vérification (--self-test)
+        shell: pwsh
+        run: |
+          $output = .\DeepUninstaller.exe --self-test | Out-String
+          Write-Host $output
+          if ($LASTEXITCODE -ne 0) {
+            throw "L'auto-test a échoué avec le code $LASTEXITCODE"
+          }
+
+      - name: Préparation du package de Release portable (.zip + SHA-256)
+        shell: pwsh
+        run: |
+          $distDir = Join-Path $PWD "dist\DeepUninstaller-Pro"
+          New-Item -ItemType Directory -Force -Path $distDir | Out-Null
+
+          Copy-Item ".\DeepUninstaller.exe" -Destination $distDir
+          Copy-Item ".\Lancer_DeepUninstaller.bat" -Destination $distDir
+          Copy-Item ".\Lancer_En_Administrateur.bat" -Destination $distDir
+          Copy-Item ".\README.md" -Destination $distDir
+          Copy-Item ".\SECURITY.md" -Destination $distDir
+          Copy-Item ".\DISCLAIMER.md" -Destination $distDir
+          Copy-Item ".\LICENSE" -Destination $distDir
+
+          $zipPath = Join-Path $PWD "DeepUninstaller-Pro-Portable-win-x64.zip"
+          Compress-Archive -Path "$distDir\*" -DestinationPath $zipPath -Force
+
+          $exeHash = (Get-FileHash -Path ".\DeepUninstaller.exe" -Algorithm SHA256).Hash.ToLower()
+          $zipHash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash.ToLower()
+
+          @(
+            "$exeHash  DeepUninstaller.exe"
+            "$zipHash  DeepUninstaller-Pro-Portable-win-x64.zip"
+          ) | Set-Content -Path ".\SHA256SUMS.txt" -Encoding UTF8
+
+          Get-Content ".\SHA256SUMS.txt"
+
+      - name: Publication des artefacts de build CI
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeepUninstaller-Pro-Windows-x64
+          path: |
+            DeepUninstaller.exe
+            DeepUninstaller-Pro-Portable-win-x64.zip
+            SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: Création automatique de la Release GitHub (sur tag v* ou déclenchement manuel)
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag != '' && inputs.release_tag || github.ref_name }}
+          name: "DeepUninstaller Pro ${{ inputs.release_tag != '' && inputs.release_tag || github.ref_name }}"
+          generate_release_notes: true
+          files: |
+            DeepUninstaller.exe
+            DeepUninstaller-Pro-Portable-win-x64.zip
+            SHA256SUMS.txt
+          body: |
+            ## 📦 Téléchargement & Utilisation
+            - **`DeepUninstaller-Pro-Portable-win-x64.zip`** : Archive portable complète (exécutable, scripts de lancement Administrateur et documentation).
+            - **`DeepUninstaller.exe`** : Exécutable autonome unique (aucune installation requise, aucune dépendance externe).
+            - **`SHA256SUMS.txt`** : Empreintes SHA-256 pour vérifier l'intégrité des fichiers téléchargés.
+
+            ---
+
+            ## ⚠️ Avertissement Légal & Sécurité ("AS IS")
+            Ce logiciel est un utilitaire d'administration système fourni **« TEL QUEL » ("AS IS")**, sans garantie d'aucune sorte, sous licence [MIT](./LICENSE).
+            Il permet de désinstaller des applications et de supprimer des fichiers, dossiers et clés du Registre Windows. L'utilisateur est seul responsable des éléments qu'il sélectionne et supprime.
+            Consultez [`SECURITY.md`](./SECURITY.md) et [`DISCLAIMER.md`](./DISCLAIMER.md) avant utilisation.

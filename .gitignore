@@ -1,0 +1,26 @@
+# Sauvegardes locales du Registre générées à l'exécution (contiennent des clés propres à la machine)
+Backups/
+*.reg
+
+# Fichiers temporaires de compilation et anciens binaires
+*.old.exe
+*.pdb
+*.user
+*.suo
+bin/
+obj/
+dist/
+release/
+*.zip
+SHA256SUMS.txt
+
+# Notes locales internes
+CONVERSATION.md
+assets/icon_source.jpg
+
+# Dossiers IDE / OS
+.vs/
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
