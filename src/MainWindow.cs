@@ -220,6 +220,27 @@ namespace DeepUninstaller
             Grid.SetRow(tabControl, 1);
             rootGrid.Children.Add(tabControl);
 
+            // Bouton d'auto-désinstallation complète placé directement sur la ligne des onglets principaux (à droite)
+            var btnSelfUninstall = new Button
+            {
+                Content = "🗑️  Désinstaller l'application",
+                Background = BrushFromHex("#7F1D1D"),
+                Foreground = BrushFromHex("#FECACA"),
+                BorderBrush = BrushFromHex("#DC2626"),
+                BorderThickness = new Thickness(1),
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 13,
+                Padding = new Thickness(16, 9, 16, 9),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                Cursor = Cursors.Hand,
+                ToolTip = "Désinstaller complètement DeepUninstaller Pro et supprimer toutes ses traces du PC"
+            };
+            Panel.SetZIndex(btnSelfUninstall, 10);
+            btnSelfUninstall.Click += (s, e) => ShowSelfUninstallDialog();
+            Grid.SetRow(btnSelfUninstall, 1);
+            rootGrid.Children.Add(btnSelfUninstall);
+
             // =========================================================================
             // 3. BARRE D'ÉTAT INFÉRIEURE
             // =========================================================================
@@ -1519,6 +1540,164 @@ namespace DeepUninstaller
             var item = new MenuItem { Header = header };
             item.Click += onClick;
             menu.Items.Add(item);
+        }
+
+        private void ShowSelfUninstallDialog()
+        {
+            string appDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
+            bool dedicatedFolder = UninstallerEngine.IsDedicatedAppDirectory(appDir);
+
+            var dlg = new Window
+            {
+                Title = "Désinstallation Complète — DeepUninstaller Pro",
+                Width = 580,
+                Height = 440,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = this,
+                Background = BrushFromHex("#0F172A"),
+                Foreground = Brushes.White,
+                FontFamily = new FontFamily("Segoe UI")
+            };
+            UiTheme.ApplyDarkTheme(dlg);
+            UiTheme.ApplyAppIcon(dlg);
+
+            var root = new Grid { Margin = new Thickness(22, 18, 22, 18) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            // En-tête d'avertissement
+            var headerBorder = new Border
+            {
+                Background = BrushFromHex("#450A0A"),
+                BorderBrush = BrushFromHex("#DC2626"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(14, 10, 14, 10),
+                Margin = new Thickness(0, 0, 0, 14)
+            };
+            var headerStack = new StackPanel();
+            headerStack.Children.Add(new TextBlock
+            {
+                Text = "⚠️ Désinstaller complètement DeepUninstaller Pro",
+                FontSize = 16,
+                FontWeight = FontWeights.Bold,
+                Foreground = BrushFromHex("#FCA5A5")
+            });
+            headerStack.Children.Add(new TextBlock
+            {
+                Text = "Cette action est irréversible et supprimera intégralement l'application ainsi que toutes ses traces sur ce PC.",
+                FontSize = 12,
+                Foreground = BrushFromHex("#FECACA"),
+                Margin = new Thickness(0, 4, 0, 0),
+                TextWrapping = TextWrapping.Wrap
+            });
+            headerBorder.Child = headerStack;
+            Grid.SetRow(headerBorder, 0);
+            root.Children.Add(headerBorder);
+
+            // Liste de ce qui sera supprimé
+            var detailsBorder = new Border
+            {
+                Background = BrushFromHex("#1E293B"),
+                BorderBrush = BrushFromHex("#334155"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(14, 10, 14, 10),
+                Margin = new Thickness(0, 0, 0, 14)
+            };
+            var detailsStack = new StackPanel();
+            detailsStack.Children.Add(new TextBlock
+            {
+                Text = "Éléments qui seront définitivement supprimés :",
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 12.5,
+                Foreground = BrushFromHex("#E2E8F0"),
+                Margin = new Thickness(0, 0, 0, 6)
+            });
+            string[] itemsToDelete = new[]
+            {
+                "• Exécutable DeepUninstaller.exe et lanceurs .bat dans : " + appDir,
+                "• Dossier Backups/ créé par l'application (sauvegardes .reg)",
+                "• Fichiers temporaires (DeepUninstaller_*) créés dans %TEMP% et raccourcis éventuels",
+                "• Traces d'exécution Windows de DeepUninstaller.exe (MuiCache, AppCompatFlags, Prefetch)",
+                "• Le dossier parent sera retiré uniquement s'il ne contient aucun autre fichier personnel"
+            };
+            foreach (var line in itemsToDelete)
+            {
+                detailsStack.Children.Add(new TextBlock
+                {
+                    Text = line,
+                    FontSize = 12,
+                    Foreground = BrushFromHex("#CBD5E1"),
+                    Margin = new Thickness(0, 2, 0, 2),
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                });
+            }
+            detailsBorder.Child = detailsStack;
+            Grid.SetRow(detailsBorder, 1);
+            root.Children.Add(detailsBorder);
+
+            // Zone de confirmation par saisie de "uninstall"
+            var confirmStack = new StackPanel { Margin = new Thickness(0, 0, 0, 16) };
+            confirmStack.Children.Add(new TextBlock
+            {
+                Text = "Pour confirmer et éviter tout clic accidentel, tapez exactement « uninstall » ci-dessous :",
+                FontSize = 12.5,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = BrushFromHex("#F8FAFC"),
+                Margin = new Thickness(0, 0, 0, 6)
+            });
+
+            var txtConfirm = CreateInputBox("Tapez uninstall ici pour déverrouiller la suppression");
+            txtConfirm.FontSize = 14;
+            txtConfirm.FontWeight = FontWeights.Bold;
+            confirmStack.Children.Add(txtConfirm);
+            Grid.SetRow(confirmStack, 2);
+            root.Children.Add(confirmStack);
+
+            // Boutons d'action
+            var footerDock = new DockPanel { LastChildFill = false };
+            var btnCancel = CreateActionButton("Annuler", "#334155", "#E2E8F0");
+            btnCancel.Click += (s, e) => dlg.Close();
+            DockPanel.SetDock(btnCancel, Dock.Right);
+            footerDock.Children.Add(btnCancel);
+
+            var btnConfirmUninstall = CreateActionButton("🗑️ Désinstaller définitivement", "#DC2626", "#FFFFFF");
+            btnConfirmUninstall.IsEnabled = false;
+            btnConfirmUninstall.Margin = new Thickness(0, 0, 10, 0);
+            btnConfirmUninstall.Click += (s, e) =>
+            {
+                if (string.Equals((txtConfirm.Text ?? "").Trim(), "uninstall", StringComparison.OrdinalIgnoreCase))
+                {
+                    dlg.IsEnabled = false;
+                    UninstallerEngine.ExecuteSelfUninstall();
+                }
+            };
+            DockPanel.SetDock(btnConfirmUninstall, Dock.Right);
+            footerDock.Children.Add(btnConfirmUninstall);
+
+            txtConfirm.TextChanged += (s, e) =>
+            {
+                btnConfirmUninstall.IsEnabled = string.Equals((txtConfirm.Text ?? "").Trim(), "uninstall", StringComparison.OrdinalIgnoreCase);
+            };
+            txtConfirm.KeyDown += (s, e) =>
+            {
+                if (e.Key == Key.Enter && btnConfirmUninstall.IsEnabled)
+                {
+                    dlg.IsEnabled = false;
+                    UninstallerEngine.ExecuteSelfUninstall();
+                }
+            };
+
+            Grid.SetRow(footerDock, 3);
+            root.Children.Add(footerDock);
+
+            dlg.Content = root;
+            dlg.Loaded += (s, e) => txtConfirm.Focus();
+            dlg.ShowDialog();
         }
 
         private static SolidColorBrush BrushFromHex(string hex)

@@ -80,6 +80,220 @@ namespace DeepUninstaller
         }
 
         /// <summary>
+        /// Vérifie si le dossier contenant DeepUninstaller.exe est un dossier dédié à l'application
+        /// (et non un dossier partagé comme Bureau, Téléchargements, Documents ou la racine d'un disque).
+        /// </summary>
+        public static bool IsDedicatedAppDirectory(string dirPath)
+        {
+            if (string.IsNullOrWhiteSpace(dirPath) || AppScanner.IsProtectedSystemDirectory(dirPath))
+                return false;
+
+            try
+            {
+                string full = Path.GetFullPath(dirPath).TrimEnd('\\', '/');
+                if (full.Length <= 3) return false;
+
+                string userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile).TrimEnd('\\', '/');
+                if (string.IsNullOrEmpty(userProfile))
+                    userProfile = (Environment.GetEnvironmentVariable("USERPROFILE") ?? "").TrimEnd('\\', '/');
+
+                string[] sharedUserFolders = new[]
+                {
+                    userProfile,
+                    Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory).TrimEnd('\\', '/'),
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory).TrimEnd('\\', '/'),
+                    Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments).TrimEnd('\\', '/'),
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonDocuments).TrimEnd('\\', '/'),
+                    Path.Combine(userProfile, "Desktop"),
+                    Path.Combine(userProfile, "Bureau"),
+                    Path.Combine(userProfile, "Documents"),
+                    Path.Combine(userProfile, "Downloads"),
+                    Path.Combine(userProfile, "Téléchargements")
+                };
+
+                foreach (var shared in sharedUserFolders)
+                {
+                    if (!string.IsNullOrWhiteSpace(shared) && string.Equals(full, shared, StringComparison.OrdinalIgnoreCase))
+                        return false;
+                }
+
+                string folderName = Path.GetFileName(full);
+                string[] sharedLeafNames = { "Desktop", "Bureau", "Documents", "Downloads", "Téléchargements", "Users", "Utilisateurs" };
+                foreach (var leaf in sharedLeafNames)
+                {
+                    if (string.Equals(folderName, leaf, StringComparison.OrdinalIgnoreCase))
+                        return false;
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Auto-désinstallation totale de DeepUninstaller Pro :
+        /// supprime toutes les sauvegardes, raccourcis, traces du Registre Windows (MuiCache, AppCompatFlags, AppSwitched),
+        /// fichiers temporaires, Prefetch, ainsi que l'exécutable et le dossier complet de l'application.
+        /// </summary>
+        public static void ExecuteSelfUninstall()
+        {
+            string exePath = null;
+            try { exePath = Process.GetCurrentProcess().MainModule.FileName; } catch { }
+            if (string.IsNullOrWhiteSpace(exePath))
+            {
+                exePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "DeepUninstaller.exe");
+            }
+
+            string appDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
+            bool deleteWholeFolder = IsDedicatedAppDirectory(appDir);
+
+            // 1. Nettoyer toutes les traces d'exécution dans le Registre Windows (HKCU & HKLM)
+            string[] traceKeys = new[]
+            {
+                @"Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache",
+                @"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Compatibility Assistant\Store",
+                @"Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers",
+                @"Software\Microsoft\Windows\CurrentVersion\Explorer\FeatureUsage\AppSwitched",
+                @"Software\Microsoft\Windows\CurrentVersion\Explorer\FeatureUsage\ShowJumpView",
+                @"Software\Microsoft\Windows\CurrentVersion\Run"
+            };
+
+            foreach (var subKeyPath in traceKeys)
+            {
+                try
+                {
+                    using (var key = Registry.CurrentUser.OpenSubKey(subKeyPath, true))
+                    {
+                        if (key != null)
+                        {
+                            foreach (var valName in key.GetValueNames())
+                            {
+                                if (valName.IndexOf("DeepUninstaller", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                    valName.IndexOf("Appli-Desintalleur", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                    (!string.IsNullOrWhiteSpace(exePath) && valName.IndexOf(exePath, StringComparison.OrdinalIgnoreCase) >= 0))
+                                {
+                                    try { key.DeleteValue(valName, false); } catch { }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\DeepUninstaller", false); } catch { }
+            try { Registry.LocalMachine.DeleteSubKeyTree(@"SOFTWARE\DeepUninstaller", false); } catch { }
+
+            // 2. Supprimer tout raccourci éventuel sur le Bureau et dans le Menu Démarrer
+            string[] shortcutFolders = new[]
+            {
+                Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory),
+                Environment.GetFolderPath(Environment.SpecialFolder.Programs),
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms)
+            };
+
+            foreach (var folder in shortcutFolders)
+            {
+                if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) continue;
+                try
+                {
+                    foreach (var f in Directory.GetFiles(folder, "*DeepUninstaller*", System.IO.SearchOption.AllDirectories))
+                    {
+                        try { File.SetAttributes(f, FileAttributes.Normal); File.Delete(f); } catch { }
+                    }
+                }
+                catch { }
+            }
+
+            // 3. Supprimer les fichiers temporaires et Prefetch associés à DeepUninstaller
+            try
+            {
+                string tempDir = Path.GetTempPath();
+                foreach (var f in Directory.GetFiles(tempDir, "*DeepUninstaller*", System.IO.SearchOption.TopDirectoryOnly))
+                {
+                    try { File.SetAttributes(f, FileAttributes.Normal); File.Delete(f); } catch { }
+                }
+                foreach (var d in Directory.GetDirectories(tempDir, "*DeepUninstaller*", System.IO.SearchOption.TopDirectoryOnly))
+                {
+                    try { ClearReadOnlyAttributes(new DirectoryInfo(d)); Directory.Delete(d, true); } catch { }
+                }
+            }
+            catch { }
+
+            try
+            {
+                string prefetchDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Prefetch");
+                if (Directory.Exists(prefetchDir))
+                {
+                    foreach (var pf in Directory.GetFiles(prefetchDir, "DEEPUNINSTALLER*.pf", System.IO.SearchOption.TopDirectoryOnly))
+                    {
+                        try { File.SetAttributes(pf, FileAttributes.Normal); File.Delete(pf); } catch { }
+                    }
+                }
+            }
+            catch { }
+
+            // 4. Supprimer uniquement le dossier Backups/ créé par l'application et les fichiers propres à la distribution de l'application
+            string backupsDir = Path.Combine(appDir, "Backups");
+            if (Directory.Exists(backupsDir))
+            {
+                try { ClearReadOnlyAttributes(new DirectoryInfo(backupsDir)); Directory.Delete(backupsDir, true); } catch { }
+            }
+
+            string[] appOwnFiles = new[]
+            {
+                "DeepUninstaller.old.exe",
+                "Lancer_DeepUninstaller.bat",
+                "Lancer_En_Administrateur.bat",
+                "README.md",
+                "SECURITY.md",
+                "DISCLAIMER.md",
+                "LICENSE"
+            };
+            foreach (var kf in appOwnFiles)
+            {
+                string fp = Path.Combine(appDir, kf);
+                if (File.Exists(fp))
+                {
+                    try { File.SetAttributes(fp, FileAttributes.Normal); File.Delete(fp); } catch { }
+                }
+            }
+
+            // 5. Supprimer DeepUninstaller.exe dès la fermeture du processus, puis supprimer le dossier parent
+            // UNIQUEMENT s'il est vide (rmdir SANS /s pour ne jamais supprimer un autre fichier personnel présent dans le dossier)
+            try
+            {
+                string cmdArgs;
+                if (deleteWholeFolder)
+                {
+                    cmdArgs = string.Format("/c ping 127.0.0.1 -n 3 > nul & del /f /q \"{0}\" > nul 2>&1 & rmdir \"{1}\" > nul 2>&1", exePath, appDir);
+                }
+                else
+                {
+                    cmdArgs = string.Format("/c ping 127.0.0.1 -n 3 > nul & del /f /q \"{0}\" > nul 2>&1", exePath);
+                }
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = cmdArgs,
+                    WorkingDirectory = Path.GetTempPath(),
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
+                Process.Start(psi);
+            }
+            catch { }
+
+            Environment.Exit(0);
+        }
+
+        /// <summary>
         /// Ferme les processus actifs appartenant au dossier d'installation de l'application
         /// </summary>
         public static int KillRunningAppProcesses(string installLocation, List<string> logs = null)

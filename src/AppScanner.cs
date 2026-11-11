@@ -308,8 +308,14 @@ namespace DeepUninstaller
                 string progFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles).TrimEnd('\\', '/');
                 string progFiles86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86).TrimEnd('\\', '/');
                 string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData).TrimEnd('\\', '/');
+                if (string.IsNullOrEmpty(localAppData))
+                    localAppData = (Environment.GetEnvironmentVariable("LOCALAPPDATA") ?? "").TrimEnd('\\', '/');
                 string roamingAppData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData).TrimEnd('\\', '/');
+                if (string.IsNullOrEmpty(roamingAppData))
+                    roamingAppData = (Environment.GetEnvironmentVariable("APPDATA") ?? "").TrimEnd('\\', '/');
                 string programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData).TrimEnd('\\', '/');
+                if (string.IsNullOrEmpty(programData))
+                    programData = (Environment.GetEnvironmentVariable("ProgramData") ?? "").TrimEnd('\\', '/');
 
                 string[] protectedExact = {
                     progFiles,
@@ -320,6 +326,7 @@ namespace DeepUninstaller
                     localAppData,
                     programData,
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile).TrimEnd('\\', '/'),
+                    (Environment.GetEnvironmentVariable("USERPROFILE") ?? "").TrimEnd('\\', '/'),
                     Path.Combine(progFiles, "WindowsApps"),
                     Path.Combine(progFiles, "ModifiableWindowsApps"),
                     Path.Combine(localAppData, "Packages"),
@@ -334,6 +341,24 @@ namespace DeepUninstaller
                 foreach (var p in protectedExact)
                 {
                     if (!string.IsNullOrEmpty(p) && string.Equals(full, p, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+
+                // Protéger les conteneurs AppData partagés quel que soit le compte utilisateur Windows (ex: UAC élevé sous un autre profil)
+                string[] protectedSuffixes = {
+                    @"\AppData",
+                    @"\AppData\Local",
+                    @"\AppData\Roaming",
+                    @"\AppData\LocalLow",
+                    @"\AppData\Local\Programs",
+                    @"\AppData\Local\Packages",
+                    @"\AppData\Local\Microsoft",
+                    @"\AppData\Local\Microsoft\WindowsApps",
+                    @"\AppData\Roaming\Microsoft"
+                };
+                foreach (var suffix in protectedSuffixes)
+                {
+                    if (full.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                         return true;
                 }
 

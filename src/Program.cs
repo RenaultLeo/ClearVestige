@@ -22,6 +22,16 @@ namespace DeepUninstaller
                 return RunSelfTest();
             }
 
+            if (args != null && args.Any(a => string.Equals(a, "--test-self-uninstall", StringComparison.OrdinalIgnoreCase)))
+            {
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                if (baseDir.IndexOf( System.IO.Path.GetTempPath().TrimEnd('\\'), StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    UninstallerEngine.ExecuteSelfUninstall();
+                }
+                return 0;
+            }
+
             try
             {
                 var app = new Application();
