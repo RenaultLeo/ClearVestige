@@ -42,18 +42,18 @@ jobs:
             Write-Host "Icône présente : assets\app.ico ($((Get-Item 'assets\app.ico').Length) octets)"
           }
 
-      - name: Compilation de DeepUninstaller.exe (.NET Framework 4.x natif)
+      - name: Compilation de ClearVestige.exe (.NET Framework 4.x natif)
         shell: pwsh
         run: |
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
-          if (-not (Test-Path ".\DeepUninstaller.exe")) {
-            throw "DeepUninstaller.exe n'a pas été généré."
+          if (-not (Test-Path ".\ClearVestige.exe")) {
+            throw "ClearVestige.exe n'a pas été généré."
           }
 
       - name: Exécution de l'Auto-Test de vérification (--self-test)
         shell: pwsh
         run: |
-          $output = .\DeepUninstaller.exe --self-test | Out-String
+          $output = .\ClearVestige.exe --self-test | Out-String
           Write-Host $output
           if ($LASTEXITCODE -ne 0) {
             throw "L'auto-test a échoué avec le code $LASTEXITCODE"
@@ -62,26 +62,26 @@ jobs:
       - name: Préparation du package de Release portable (.zip + SHA-256)
         shell: pwsh
         run: |
-          $distDir = Join-Path $PWD "dist\DeepUninstaller-Pro"
+          $distDir = Join-Path $PWD "dist\ClearVestige"
           New-Item -ItemType Directory -Force -Path $distDir | Out-Null
 
-          Copy-Item ".\DeepUninstaller.exe" -Destination $distDir
-          Copy-Item ".\Lancer_DeepUninstaller.bat" -Destination $distDir
+          Copy-Item ".\ClearVestige.exe" -Destination $distDir
+          Copy-Item ".\Lancer_ClearVestige.bat" -Destination $distDir
           Copy-Item ".\Lancer_En_Administrateur.bat" -Destination $distDir
           Copy-Item ".\README.md" -Destination $distDir
           Copy-Item ".\SECURITY.md" -Destination $distDir
           Copy-Item ".\DISCLAIMER.md" -Destination $distDir
           Copy-Item ".\LICENSE" -Destination $distDir
 
-          $zipPath = Join-Path $PWD "DeepUninstaller-Pro-Portable-win-x64.zip"
+          $zipPath = Join-Path $PWD "ClearVestige-Portable-win-x64.zip"
           Compress-Archive -Path "$distDir\*" -DestinationPath $zipPath -Force
 
-          $exeHash = (Get-FileHash -Path ".\DeepUninstaller.exe" -Algorithm SHA256).Hash.ToLower()
+          $exeHash = (Get-FileHash -Path ".\ClearVestige.exe" -Algorithm SHA256).Hash.ToLower()
           $zipHash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash.ToLower()
 
           @(
-            "$exeHash  DeepUninstaller.exe"
-            "$zipHash  DeepUninstaller-Pro-Portable-win-x64.zip"
+            "$exeHash  ClearVestige.exe"
+            "$zipHash  ClearVestige-Portable-win-x64.zip"
           ) | Set-Content -Path ".\SHA256SUMS.txt" -Encoding UTF8
 
           Get-Content ".\SHA256SUMS.txt"
@@ -89,10 +89,10 @@ jobs:
       - name: Publication des artefacts de build CI
         uses: actions/upload-artifact@v4
         with:
-          name: DeepUninstaller-Pro-Windows-x64
+          name: ClearVestige-Windows-x64
           path: |
-            DeepUninstaller.exe
-            DeepUninstaller-Pro-Portable-win-x64.zip
+            ClearVestige.exe
+            ClearVestige-Portable-win-x64.zip
             SHA256SUMS.txt
           if-no-files-found: error
 
@@ -101,26 +101,26 @@ jobs:
         uses: actions/attest@v4
         with:
           subject-path: |
-            DeepUninstaller.exe
-            DeepUninstaller-Pro-Portable-win-x64.zip
+            ClearVestige.exe
+            ClearVestige-Portable-win-x64.zip
 
       - name: Création automatique de la Release GitHub (sur tag v* ou déclenchement manuel)
         if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.release_tag != '' && inputs.release_tag || github.ref_name }}
-          name: "DeepUninstaller Pro ${{ inputs.release_tag != '' && inputs.release_tag || github.ref_name }}"
+          name: "ClearVestige ${{ inputs.release_tag != '' && inputs.release_tag || github.ref_name }}"
           generate_release_notes: true
           files: |
-            DeepUninstaller.exe
-            DeepUninstaller-Pro-Portable-win-x64.zip
+            ClearVestige.exe
+            ClearVestige-Portable-win-x64.zip
             SHA256SUMS.txt
           body: |
             ## 📦 Téléchargement & Utilisation
-            - **`DeepUninstaller-Pro-Portable-win-x64.zip`** : Archive portable complète (exécutable, scripts de lancement Administrateur et documentation).
-            - **`DeepUninstaller.exe`** : Exécutable autonome unique (aucune installation requise, aucune dépendance externe).
+            - **`ClearVestige-Portable-win-x64.zip`** : Archive portable complète (exécutable, scripts de lancement Administrateur et documentation).
+            - **`ClearVestige.exe`** : Exécutable autonome unique (aucune installation requise, aucune dépendance externe).
             - **`SHA256SUMS.txt`** : Empreintes SHA-256 pour vérifier l'intégrité des fichiers téléchargés.
-            - **Attestation de provenance (Sigstore / GitHub)** : Les binaires incluent une attestation cryptographique générée par GitHub Actions prouvant qu'ils proviennent exactement du code source public de ce dépôt (`gh attestation verify DeepUninstaller.exe -R <propriétaire>/<dépôt>`).
+            - **Attestation de provenance (Sigstore / GitHub)** : Les binaires incluent une attestation cryptographique générée par GitHub Actions prouvant qu'ils proviennent exactement du code source public de ce dépôt (`gh attestation verify ClearVestige.exe -R <propriétaire>/<dépôt>`).
 
             > **Note Windows SmartScreen :** Ce binaire open-source n'étant pas signé par un certificat commercial payant, Windows peut afficher *« Éditeur inconnu »* au premier lancement. Cliquez sur **Informations complémentaires** ➔ **Exécuter quand même** (ou cochez **Débloquer** dans les *Propriétés* du fichier).
 

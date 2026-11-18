@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel;
 
-namespace DeepUninstaller
+namespace ClearVestige
 {
     public enum AppScope
     {

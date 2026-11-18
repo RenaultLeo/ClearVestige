@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
-namespace DeepUninstaller
+namespace ClearVestige
 {
     public static class LeftoverScanner
     {
@@ -1216,7 +1216,7 @@ namespace DeepUninstaller
                 if (string.Equals(cand, token, StringComparison.OrdinalIgnoreCase))
                     return true;
 
-                // Correspondance sans espaces (ex: "DeepUninstaller" vs "Deep Uninstaller")
+                // Correspondance sans espaces (ex: "ClearVestige" vs "Clear Vestige")
                 string candNoSpace = cand.Replace(" ", "").Replace("-", "").Replace("_", "");
                 string tokenNoSpace = token.Replace(" ", "").Replace("-", "").Replace("_", "");
                 if (tokenNoSpace.Length >= 4 && string.Equals(candNoSpace, tokenNoSpace, StringComparison.OrdinalIgnoreCase))

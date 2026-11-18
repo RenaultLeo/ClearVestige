@@ -7,7 +7,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
-namespace DeepUninstaller
+namespace ClearVestige
 {
     public static class AppScanner
     {

@@ -11,7 +11,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 
-namespace DeepUninstaller
+namespace ClearVestige
 {
     /// <summary>
     /// Désinstallation multiple : exécute les désinstallateurs officiels de plusieurs applications
@@ -309,7 +309,7 @@ namespace DeepUninstaller
                 IsReadOnly = true,
                 TextWrapping = TextWrapping.Wrap,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Text = string.Format("[DeepUninstaller] Désinstallation multiple prête : {0} application(s)\r\n", _queue.Count)
+                Text = string.Format("[ClearVestige] Désinstallation multiple prête : {0} application(s)\r\n", _queue.Count)
             };
             logBorder.Child = _txtLogs;
             Grid.SetRow(logBorder, 5);

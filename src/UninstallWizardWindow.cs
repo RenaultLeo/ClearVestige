@@ -12,7 +12,7 @@ using System.Windows.Input;
 using System.Windows.Markup;
 using System.Windows.Media;
 
-namespace DeepUninstaller
+namespace ClearVestige
 {
     public class UninstallWizardWindow : Window
     {
@@ -334,7 +334,7 @@ namespace DeepUninstaller
                 IsReadOnly = true,
                 TextWrapping = TextWrapping.Wrap,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Text = "[DeepUninstaller] Assistant prêt pour : " + _app.DisplayName + "\r\n"
+                Text = "[ClearVestige] Assistant prêt pour : " + _app.DisplayName + "\r\n"
             };
             logBorder.Child = _txtLogs;
             Grid.SetRow(logBorder, 4);

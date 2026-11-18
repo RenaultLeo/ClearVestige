@@ -1,18 +1,18 @@
-# <img src="./assets/icon.png" width="38" height="38" valign="middle" alt="Logo" /> DeepUninstaller Pro — Désinstallateur Complet & Nettoyeur de Résidus (Windows)
+# <img src="./assets/icon.png" width="38" height="38" valign="middle" alt="Logo" /> ClearVestige — Désinstallateur Complet & Nettoyeur de Résidus (Windows)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Platform: Windows 10/11](https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20(x64)-0078D6.svg)](#)
 [![Framework: .NET 4.x / WPF](https://img.shields.io/badge/.NET%20Framework-4.x%20(Natif%20Windows)-512BD4.svg)](#)
 [![Zero Telemetry](https://img.shields.io/badge/Privacy-100%25%20Offline%20%2F%20Zero%20Telemetry-10B981.svg)](./SECURITY.md)
 
-**DeepUninstaller Pro** est une application de bureau native Windows (**C# / WPF**) 100 % originale, autonome, hors-ligne et sans aucune dépendance externe. Elle permet de désinstaller des applications (individuellement ou par lot), d'éradiquer en profondeur toutes leurs traces résiduelles (fichiers, dossiers, raccourcis et clés/valeurs du Registre Windows), de détecter les logiciels orphelins et d'optimiser le démarrage de Windows.
+**ClearVestige** est une application de bureau native Windows (**C# / WPF**) 100 % originale, autonome, hors-ligne et sans aucune dépendance externe. Elle permet de désinstaller des applications (individuellement ou par lot), d'éradiquer en profondeur toutes leurs traces résiduelles (fichiers, dossiers, raccourcis et clés/valeurs du Registre Windows), de détecter les logiciels orphelins et d'optimiser le démarrage de Windows.
 
 ---
 
 ## ⚠️ Avertissement Légal & Sécurité ("AS IS")
 
 > **Ce logiciel est fourni « TEL QUEL » (*"AS IS"*), sans garantie d'aucune sorte, sous [Licence MIT](./LICENSE).**  
-> **DeepUninstaller Pro** est un outil d'administration système capable de désinstaller des programmes et de supprimer des fichiers, dossiers et clés du Registre Windows. Bien que des protections strictes soient intégrées (sauvegarde automatique `.reg` dans `Backups/`, envoi vers la Corbeille Windows, liste blanche des dossiers et processus système Windows), **l'utilisateur demeure seul responsable de la vérification des éléments cochés avant toute suppression**.  
+> **ClearVestige** est un outil d'administration système capable de désinstaller des programmes et de supprimer des fichiers, dossiers et clés du Registre Windows. Bien que des protections strictes soient intégrées (sauvegarde automatique `.reg` dans `Backups/`, envoi vers la Corbeille Windows, liste blanche des dossiers et processus système Windows), **l'utilisateur demeure seul responsable de la vérification des éléments cochés avant toute suppression**.  
 > 📄 **Documentation complète à consulter avant utilisation :**
 > - 🛡️ [**Politique de Sécurité & Transparence Technique (`SECURITY.md`)**](./SECURITY.md)
 > - ⚖️ [**Avertissement Légal & Clause de Non-Responsabilité (`DISCLAIMER.md`)**](./DISCLAIMER.md)
@@ -57,18 +57,18 @@ Aucune installation de SDK lourd (Visual Studio, Node.js ou Python) n'est requis
 
 ### Lancer l'application
 - **Mode Administrateur (Recommandé)** : Double-cliquez sur [`Lancer_En_Administrateur.bat`](./Lancer_En_Administrateur.bat) (ou cliquez sur **« ⚡ Relancer en Administrateur »** dans l'en-tête de l'application).
-- **Mode Standard** : Double-cliquez sur [`DeepUninstaller.exe`](./DeepUninstaller.exe) ou [`Lancer_DeepUninstaller.bat`](./Lancer_DeepUninstaller.bat).
+- **Mode Standard** : Double-cliquez sur [`ClearVestige.exe`](./ClearVestige.exe) ou [`Lancer_ClearVestige.bat`](./Lancer_ClearVestige.bat).
 
 ### Compiler depuis le code source
 ```powershell
 # 1. (Optionnel) Régénérer l'icône multi-tailles assets\app.ico
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\make_icon.ps1
 
-# 2. Compiler DeepUninstaller.exe
+# 2. Compiler ClearVestige.exe
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 
 # 3. Exécuter l'auto-test de vérification
-.\DeepUninstaller.exe --self-test | Out-Host
+.\ClearVestige.exe --self-test | Out-Host
 ```
 
 ---
@@ -77,11 +77,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 
 Le dépôt inclut un workflow complet dans [`.github/workflows/ci-build-and-release.yml`](./.github/workflows/ci-build-and-release.yml) :
 1. **À chaque `push` ou `pull_request` sur `main` / `master`** :
-   - Compile `DeepUninstaller.exe` sur une machine virtuelle `windows-latest`.
+   - Compile `ClearVestige.exe` sur une machine virtuelle `windows-latest`.
    - Exécute la suite d'auto-tests (`--self-test`) pour valider le scanner d'applications, le scanner de résidus, les protections Store, le thème sombre et la fenêtre de désinstallation par lot.
-   - Génère l'archive portable `DeepUninstaller-Pro-Portable-win-x64.zip` ainsi que le fichier d'empreintes `SHA256SUMS.txt` en artefact CI.
+   - Génère l'archive portable `ClearVestige-Portable-win-x64.zip` ainsi que le fichier d'empreintes `SHA256SUMS.txt` en artefact CI.
 2. **À chaque publication d'un tag `v*` (ex: `git tag v1.4.0 && git push origin v1.4.0`) ou déclenchement manuel (`workflow_dispatch`)** :
-   - Crée automatiquement une **GitHub Release** officielle avec `DeepUninstaller.exe`, `DeepUninstaller-Pro-Portable-win-x64.zip` et `SHA256SUMS.txt` prêts au téléchargement.
+   - Crée automatiquement une **GitHub Release** officielle avec `ClearVestige.exe`, `ClearVestige-Portable-win-x64.zip` et `SHA256SUMS.txt` prêts au téléchargement.
 
 ---
 
@@ -107,7 +107,7 @@ Le dépôt inclut un workflow complet dans [`.github/workflows/ci-build-and-rele
 ├── build.ps1                      # Script de compilation native via csc.exe (.NET Framework 4.x)
 ├── make_icon.ps1                  # Générateur d'icône .ico multi-tailles sans dépendance externe
 ├── Lancer_En_Administrateur.bat   # Lanceur avec élévation UAC Administrateur
-├── Lancer_DeepUninstaller.bat     # Lanceur standard
+├── Lancer_ClearVestige.bat     # Lanceur standard
 ├── SECURITY.md                    # Politique de sécurité, opérations système & garde-fous
 ├── DISCLAIMER.md                  # Avertissement légal & clause de non-responsabilité ("AS IS")
 └── LICENSE                        # Licence Open-Source MIT

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -13,7 +13,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 
-namespace DeepUninstaller
+namespace ClearVestige
 {
     public class MainWindow : Window
     {
@@ -73,7 +73,7 @@ namespace DeepUninstaller
         {
             UiTheme.ApplyDarkTheme(this);
 
-            Title = "DeepUninstaller Pro v1.4 — Désinstallateur Complet & Nettoyeur de Résidus";
+            Title = "ClearVestige v1.4 — Désinstallateur Complet & Nettoyeur de Résidus";
             UiTheme.ApplyAppIcon(this);
             Width = 1240;
             Height = 800;
@@ -98,7 +98,7 @@ namespace DeepUninstaller
             var titleStack = new StackPanel { Orientation = Orientation.Vertical };
             titleStack.Children.Add(new TextBlock
             {
-                Text = "DeepUninstaller Pro",
+                Text = "ClearVestige",
                 FontSize = 24,
                 FontWeight = FontWeights.Bold,
                 Foreground = Brushes.White
@@ -234,7 +234,7 @@ namespace DeepUninstaller
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Top,
                 Cursor = Cursors.Hand,
-                ToolTip = "Désinstaller complètement DeepUninstaller Pro et supprimer toutes ses traces du PC"
+                ToolTip = "Désinstaller complètement ClearVestige et supprimer toutes ses traces du PC"
             };
             Panel.SetZIndex(btnSelfUninstall, 10);
             btnSelfUninstall.Click += (s, e) => ShowSelfUninstallDialog();
@@ -1549,7 +1549,7 @@ namespace DeepUninstaller
 
             var dlg = new Window
             {
-                Title = "Désinstallation Complète — DeepUninstaller Pro",
+                Title = "Désinstallation Complète — ClearVestige",
                 Width = 580,
                 Height = 440,
                 ResizeMode = ResizeMode.NoResize,
@@ -1581,7 +1581,7 @@ namespace DeepUninstaller
             var headerStack = new StackPanel();
             headerStack.Children.Add(new TextBlock
             {
-                Text = "⚠️ Désinstaller complètement DeepUninstaller Pro",
+                Text = "⚠️ Désinstaller complètement ClearVestige",
                 FontSize = 16,
                 FontWeight = FontWeights.Bold,
                 Foreground = BrushFromHex("#FCA5A5")
@@ -1619,10 +1619,10 @@ namespace DeepUninstaller
             });
             string[] itemsToDelete = new[]
             {
-                "• Exécutable DeepUninstaller.exe et lanceurs .bat dans : " + appDir,
+                "• Exécutable ClearVestige.exe et lanceurs .bat dans : " + appDir,
                 "• Dossier Backups/ créé par l'application (sauvegardes .reg)",
-                "• Fichiers temporaires (DeepUninstaller_*) créés dans %TEMP% et raccourcis éventuels",
-                "• Traces d'exécution Windows de DeepUninstaller.exe (MuiCache, AppCompatFlags, Prefetch)",
+                "• Fichiers temporaires (ClearVestige_*) créés dans %TEMP% et raccourcis éventuels",
+                "• Traces d'exécution Windows de ClearVestige.exe (MuiCache, AppCompatFlags, Prefetch)",
                 "• Le dossier parent sera retiré uniquement s'il ne contient aucun autre fichier personnel"
             };
             foreach (var line in itemsToDelete)

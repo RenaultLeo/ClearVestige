@@ -2,7 +2,7 @@
 
 $projectDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $srcDir = Join-Path $projectDir "src"
-$outExe = Join-Path $projectDir "DeepUninstaller.exe"
+$outExe = Join-Path $projectDir "ClearVestige.exe"
 
 $fwDir = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319"
 $wpfDir = Join-Path $fwDir "WPF"
@@ -34,14 +34,14 @@ $cscArgs = @(
 $iconFile = Join-Path $projectDir "assets\app.ico"
 if (Test-Path $iconFile) {
     $cscArgs += "/win32icon:$iconFile"
-    $cscArgs += "/resource:$iconFile,DeepUninstaller.app.ico"
+    $cscArgs += "/resource:$iconFile,ClearVestige.app.ico"
 }
 
 $cscArgs += $sourceFiles
 
-Write-Host "Compilation de DeepUninstaller.exe en cours..." -ForegroundColor Cyan
-Get-Process -Name "DeepUninstaller" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-$oldExe = Join-Path $projectDir "DeepUninstaller.old.exe"
+Write-Host "Compilation de ClearVestige.exe en cours..." -ForegroundColor Cyan
+Get-Process -Name "ClearVestige" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+$oldExe = Join-Path $projectDir "ClearVestige.old.exe"
 Remove-Item -Path $oldExe -Force -ErrorAction SilentlyContinue
 if (Test-Path $outExe) {
     try {

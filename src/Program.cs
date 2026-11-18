@@ -3,14 +3,14 @@ using System.Linq;
 using System.Reflection;
 using System.Windows;
 
-[assembly: AssemblyTitle("DeepUninstaller Pro")]
+[assembly: AssemblyTitle("ClearVestige")]
 [assembly: AssemblyDescription("Utilitaire autonome de désinstallation complète et de nettoyage en profondeur des résidus Windows")]
-[assembly: AssemblyCompany("DeepUninstaller")]
-[assembly: AssemblyProduct("DeepUninstaller Pro")]
+[assembly: AssemblyCompany("ClearVestige")]
+[assembly: AssemblyProduct("ClearVestige")]
 [assembly: AssemblyVersion("1.4.0.0")]
 [assembly: AssemblyFileVersion("1.4.0.0")]
 
-namespace DeepUninstaller
+namespace ClearVestige
 {
     public static class Program
     {
@@ -39,7 +39,7 @@ namespace DeepUninstaller
                 {
                     MessageBox.Show(
                         "Une erreur inattendue est survenue :\n\n" + e.Exception.Message,
-                        "DeepUninstaller Pro — Erreur",
+                        "ClearVestige — Erreur",
                         MessageBoxButton.OK,
                         MessageBoxImage.Error);
                     e.Handled = true;
@@ -53,7 +53,7 @@ namespace DeepUninstaller
             {
                 MessageBox.Show(
                     "Erreur critique au démarrage :\n\n" + ex,
-                    "DeepUninstaller Pro",
+                    "ClearVestige",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
                 return 1;
@@ -62,7 +62,7 @@ namespace DeepUninstaller
 
         private static int RunSelfTest()
         {
-            Console.WriteLine("=== DeepUninstaller Pro - Auto-Test de Verification ===");
+            Console.WriteLine("=== ClearVestige - Auto-Test de Verification ===");
 
             var apps = AppScanner.ScanInstalledApps(false, false);
             Console.WriteLine("Applications installées détectées : " + apps.Count);

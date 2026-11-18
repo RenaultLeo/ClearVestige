@@ -7,7 +7,7 @@ using System.Windows.Input;
 using System.Windows.Markup;
 using System.Windows.Media;
 
-namespace DeepUninstaller
+namespace ClearVestige
 {
     public static class UiTheme
     {
@@ -24,7 +24,7 @@ namespace DeepUninstaller
         private static bool _appIconLoaded;
 
         /// <summary>
-        /// Icône de l'application (ressource intégrée « DeepUninstaller.app.ico »), ou null si absente.
+        /// Icône de l'application (ressource intégrée « ClearVestige.app.ico »), ou null si absente.
         /// </summary>
         public static ImageSource AppIcon
         {
@@ -36,7 +36,7 @@ namespace DeepUninstaller
                     try
                     {
                         var asm = System.Reflection.Assembly.GetExecutingAssembly();
-                        using (var stream = asm.GetManifestResourceStream("DeepUninstaller.app.ico"))
+                        using (var stream = asm.GetManifestResourceStream("ClearVestige.app.ico"))
                         {
                             if (stream != null)
                             {

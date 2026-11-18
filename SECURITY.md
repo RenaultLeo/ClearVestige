@@ -1,12 +1,12 @@
 # Politique de Sécurité & Transparence Technique (`SECURITY.md`)
 
-Ce document détaille le fonctionnement interne de **DeepUninstaller Pro**, les opérations système qu'il effectue, les garde-fous de sécurité intégrés au code source, ainsi que la procédure de signalement d'une vulnérabilité.
+Ce document détaille le fonctionnement interne de **ClearVestige**, les opérations système qu'il effectue, les garde-fous de sécurité intégrés au code source, ainsi que la procédure de signalement d'une vulnérabilité.
 
 ---
 
 ## 1. Philosophie & Confidentialité (100 % Hors-Ligne)
 
-- **Aucune connexion réseau / Zéro télémétrie** : `DeepUninstaller Pro` ne contient aucun appel réseau (`HttpClient`, `WebRequest`, `Socket`). Il n'envoie aucune donnée, statistique ou liste d'applications vers Internet.
+- **Aucune connexion réseau / Zéro télémétrie** : `ClearVestige` ne contient aucun appel réseau (`HttpClient`, `WebRequest`, `Socket`). Il n'envoie aucune donnée, statistique ou liste d'applications vers Internet.
 - **Zéro dépendance externe** : L'application utilise exclusivement les bibliothèques natives de Microsoft présentes par défaut dans Windows (`.NET Framework 4.x`, `PresentationFramework` WPF et les API Win32 standard de Windows). Aucun paquet NuGet tiers ni bibliothèque opaque n'est embarqué.
 - **Code source 100 % ouvert et auditable** : L'intégralité du programme tient dans le dossier [`src/`](./src) et peut être recompilée en moins de 3 secondes sur n'importe quel PC Windows via le script [`build.ps1`](./build.ps1) utilisant le compilateur officiel `csc.exe` intégré à Windows.
 
@@ -54,7 +54,7 @@ Par conséquent :
 - Certains moteurs antivirus heuristiques peuvent analyser plus attentivement un utilitaire capable de lire le Registre, de gérer les entrées de démarrage (`Run`) et de lancer des désinstallations en mode Administrateur.
 
 **Comment vérifier ou compiler vous-même l'application :**
-1. Vérifiez l'empreinte **SHA-256** de `DeepUninstaller.exe` avec le fichier `SHA256SUMS.txt` généré par le workflow GitHub Actions.
+1. Vérifiez l'empreinte **SHA-256** de `ClearVestige.exe` avec le fichier `SHA256SUMS.txt` généré par le workflow GitHub Actions.
 2. Ou clonez simplement le dépôt et compilez vous-même votre propre exécutable en ouvrant PowerShell dans le dossier du projet :
    ```powershell
    powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1

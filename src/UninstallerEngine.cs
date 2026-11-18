@@ -10,7 +10,7 @@ using System.Text.RegularExpressions;
 using Microsoft.VisualBasic.FileIO;
 using Microsoft.Win32;
 
-namespace DeepUninstaller
+namespace ClearVestige
 {
     public class CleanupReport
     {
@@ -80,7 +80,7 @@ namespace DeepUninstaller
         }
 
         /// <summary>
-        /// Vérifie si le dossier contenant DeepUninstaller.exe est un dossier dédié à l'application
+        /// Vérifie si le dossier contenant ClearVestige.exe est un dossier dédié à l'application
         /// (et non un dossier partagé comme Bureau, Téléchargements, Documents ou la racine d'un disque).
         /// </summary>
         public static bool IsDedicatedAppDirectory(string dirPath)
@@ -134,7 +134,7 @@ namespace DeepUninstaller
         }
 
         /// <summary>
-        /// Auto-désinstallation totale de DeepUninstaller Pro :
+        /// Auto-désinstallation totale de ClearVestige :
         /// supprime toutes les sauvegardes, raccourcis, traces du Registre Windows (MuiCache, AppCompatFlags, AppSwitched),
         /// fichiers temporaires, Prefetch, ainsi que l'exécutable et le dossier complet de l'application.
         /// </summary>
@@ -144,7 +144,7 @@ namespace DeepUninstaller
             try { exePath = Process.GetCurrentProcess().MainModule.FileName; } catch { }
             if (string.IsNullOrWhiteSpace(exePath))
             {
-                exePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "DeepUninstaller.exe");
+                exePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ClearVestige.exe");
             }
 
             string appDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
@@ -171,7 +171,7 @@ namespace DeepUninstaller
                         {
                             foreach (var valName in key.GetValueNames())
                             {
-                                if (valName.IndexOf("DeepUninstaller", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                if (valName.IndexOf("ClearVestige", StringComparison.OrdinalIgnoreCase) >= 0 ||
                                     valName.IndexOf("Appli-Desintalleur", StringComparison.OrdinalIgnoreCase) >= 0 ||
                                     (!string.IsNullOrWhiteSpace(exePath) && valName.IndexOf(exePath, StringComparison.OrdinalIgnoreCase) >= 0))
                                 {
@@ -184,8 +184,8 @@ namespace DeepUninstaller
                 catch { }
             }
 
-            try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\DeepUninstaller", false); } catch { }
-            try { Registry.LocalMachine.DeleteSubKeyTree(@"SOFTWARE\DeepUninstaller", false); } catch { }
+            try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\ClearVestige", false); } catch { }
+            try { Registry.LocalMachine.DeleteSubKeyTree(@"SOFTWARE\ClearVestige", false); } catch { }
 
             // 2. Supprimer tout raccourci éventuel sur le Bureau et dans le Menu Démarrer
             string[] shortcutFolders = new[]
@@ -201,7 +201,7 @@ namespace DeepUninstaller
                 if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) continue;
                 try
                 {
-                    foreach (var f in Directory.GetFiles(folder, "*DeepUninstaller*", System.IO.SearchOption.AllDirectories))
+                    foreach (var f in Directory.GetFiles(folder, "*ClearVestige*", System.IO.SearchOption.AllDirectories))
                     {
                         try { File.SetAttributes(f, FileAttributes.Normal); File.Delete(f); } catch { }
                     }
@@ -209,15 +209,15 @@ namespace DeepUninstaller
                 catch { }
             }
 
-            // 3. Supprimer les fichiers temporaires et Prefetch associés à DeepUninstaller
+            // 3. Supprimer les fichiers temporaires et Prefetch associés à ClearVestige
             try
             {
                 string tempDir = Path.GetTempPath();
-                foreach (var f in Directory.GetFiles(tempDir, "*DeepUninstaller*", System.IO.SearchOption.TopDirectoryOnly))
+                foreach (var f in Directory.GetFiles(tempDir, "*ClearVestige*", System.IO.SearchOption.TopDirectoryOnly))
                 {
                     try { File.SetAttributes(f, FileAttributes.Normal); File.Delete(f); } catch { }
                 }
-                foreach (var d in Directory.GetDirectories(tempDir, "*DeepUninstaller*", System.IO.SearchOption.TopDirectoryOnly))
+                foreach (var d in Directory.GetDirectories(tempDir, "*ClearVestige*", System.IO.SearchOption.TopDirectoryOnly))
                 {
                     try { ClearReadOnlyAttributes(new DirectoryInfo(d)); Directory.Delete(d, true); } catch { }
                 }
@@ -229,7 +229,7 @@ namespace DeepUninstaller
                 string prefetchDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Prefetch");
                 if (Directory.Exists(prefetchDir))
                 {
-                    foreach (var pf in Directory.GetFiles(prefetchDir, "DEEPUNINSTALLER*.pf", System.IO.SearchOption.TopDirectoryOnly))
+                    foreach (var pf in Directory.GetFiles(prefetchDir, "CLEARVESTIGE*.pf", System.IO.SearchOption.TopDirectoryOnly))
                     {
                         try { File.SetAttributes(pf, FileAttributes.Normal); File.Delete(pf); } catch { }
                     }
@@ -246,8 +246,8 @@ namespace DeepUninstaller
 
             string[] appOwnFiles = new[]
             {
-                "DeepUninstaller.old.exe",
-                "Lancer_DeepUninstaller.bat",
+                "ClearVestige.old.exe",
+                "Lancer_ClearVestige.bat",
                 "Lancer_En_Administrateur.bat",
                 "README.md",
                 "SECURITY.md",
@@ -263,7 +263,7 @@ namespace DeepUninstaller
                 }
             }
 
-            // 5. Supprimer DeepUninstaller.exe dès la fermeture du processus, puis supprimer le dossier parent
+            // 5. Supprimer ClearVestige.exe dès la fermeture du processus, puis supprimer le dossier parent
             // UNIQUEMENT s'il est vide (rmdir SANS /s pour ne jamais supprimer un autre fichier personnel présent dans le dossier)
             try
             {
@@ -573,7 +573,7 @@ namespace DeepUninstaller
 
             try
             {
-                string safeDesc = (description ?? "DeepUninstaller").Replace("'", "");
+                string safeDesc = (description ?? "ClearVestige").Replace("'", "");
                 var psi = new ProcessStartInfo
                 {
                     FileName = "powershell.exe",
@@ -1036,7 +1036,7 @@ namespace DeepUninstaller
                     string tempDir = Path.GetTempPath();
                     if (string.Equals(rootDrive, Path.GetPathRoot(tempDir), StringComparison.OrdinalIgnoreCase))
                     {
-                        string trashDir = Path.Combine(tempDir, "DeepUninstaller_EvictedDir_" + Guid.NewGuid().ToString("N"));
+                        string trashDir = Path.Combine(tempDir, "ClearVestige_EvictedDir_" + Guid.NewGuid().ToString("N"));
                         Directory.Move(dirPath, trashDir);
                         MoveFileEx(trashDir, null, MOVEFILE_DELAY_UNTIL_REBOOT);
                         if (logs != null)
@@ -1093,11 +1093,11 @@ namespace DeepUninstaller
                 string targetTrashPath;
                 if (string.Equals(rootDrive, Path.GetPathRoot(tempDir), StringComparison.OrdinalIgnoreCase))
                 {
-                    targetTrashPath = Path.Combine(tempDir, "DeepUninstaller_Evicted_" + Guid.NewGuid().ToString("N") + ".tmp");
+                    targetTrashPath = Path.Combine(tempDir, "ClearVestige_Evicted_" + Guid.NewGuid().ToString("N") + ".tmp");
                 }
                 else
                 {
-                    targetTrashPath = Path.Combine(rootDrive, "DeepUninstaller_Evicted_" + Guid.NewGuid().ToString("N") + ".tmp");
+                    targetTrashPath = Path.Combine(rootDrive, "ClearVestige_Evicted_" + Guid.NewGuid().ToString("N") + ".tmp");
                 }
 
                 File.Move(filePath, targetTrashPath);
