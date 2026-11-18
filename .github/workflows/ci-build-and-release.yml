@@ -20,6 +20,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   build-and-test:
@@ -94,6 +96,14 @@ jobs:
             SHA256SUMS.txt
           if-no-files-found: error
 
+      - name: Génération de l'attestation de provenance GitHub (Build Provenance)
+        if: github.event_name != 'pull_request'
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            DeepUninstaller.exe
+            DeepUninstaller-Pro-Portable-win-x64.zip
+
       - name: Création automatique de la Release GitHub (sur tag v* ou déclenchement manuel)
         if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
         uses: softprops/action-gh-release@v2
@@ -110,6 +120,9 @@ jobs:
             - **`DeepUninstaller-Pro-Portable-win-x64.zip`** : Archive portable complète (exécutable, scripts de lancement Administrateur et documentation).
             - **`DeepUninstaller.exe`** : Exécutable autonome unique (aucune installation requise, aucune dépendance externe).
             - **`SHA256SUMS.txt`** : Empreintes SHA-256 pour vérifier l'intégrité des fichiers téléchargés.
+            - **Attestation de provenance (Sigstore / GitHub)** : Les binaires incluent une attestation cryptographique générée par GitHub Actions prouvant qu'ils proviennent exactement du code source public de ce dépôt (`gh attestation verify DeepUninstaller.exe -R <propriétaire>/<dépôt>`).
+
+            > **Note Windows SmartScreen :** Ce binaire open-source n'étant pas signé par un certificat commercial payant, Windows peut afficher *« Éditeur inconnu »* au premier lancement. Cliquez sur **Informations complémentaires** ➔ **Exécuter quand même** (ou cochez **Débloquer** dans les *Propriétés* du fichier).
 
             ---
 
