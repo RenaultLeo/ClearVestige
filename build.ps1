@@ -38,6 +38,12 @@ if (Test-Path $iconFile) {
     $cscArgs += "/resource:$iconFile,ClearVestige.app.ico"
 }
 
+# Manifeste Windows officiel (Windows 10/11, UAC asInvoker, PerMonitorV2 DPI, chemins longs)
+$manifestFile = Join-Path $projectDir "app.manifest"
+if (Test-Path $manifestFile) {
+    $cscArgs += "/win32manifest:$manifestFile"
+}
+
 $cscArgs += $sourceFiles
 
 Write-Host "Compilation de ClearVestige.exe en cours..." -ForegroundColor Cyan
