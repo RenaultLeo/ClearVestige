@@ -71,7 +71,15 @@ namespace ClearVestige
             Foreground = Brushes.White;
             FontFamily = new FontFamily("Segoe UI");
 
-            var rootGrid = new Grid { Margin = new Thickness(20) };
+            var outerGrid = new Grid();
+            outerGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            outerGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            var titleBar = UiTheme.CreateCompactTitleBar(this, "CLEARVESTIGE", "Désinstallation — " + _app.DisplayName, true);
+            Grid.SetRow(titleBar, 0);
+            outerGrid.Children.Add(titleBar);
+
+            var rootGrid = new Grid { Margin = new Thickness(20, 14, 20, 18) };
             rootGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // En-tête application
             rootGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Options & Niveau de scan
             rootGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Barre d'étape et actions scan
@@ -359,7 +367,10 @@ namespace ClearVestige
             Grid.SetRow(footerDock, 5);
             rootGrid.Children.Add(footerDock);
 
-            Content = rootGrid;
+            Grid.SetRow(rootGrid, 1);
+            outerGrid.Children.Add(rootGrid);
+
+            Content = UiTheme.ConfigureCustomChrome(this, 46, outerGrid, true);
         }
 
         private async void OnWindowLoaded(object sender, RoutedEventArgs e)
@@ -525,12 +536,20 @@ namespace ClearVestige
                 }
                 UpdateSelectionCounters();
 
+                string extraReboot = report.ScheduledForRebootItems > 0
+                    ? string.Format(", {0} planifié(s) au redémarrage", report.ScheduledForRebootItems)
+                    : "";
+                string extraFailed = report.FailedItems > 0
+                    ? string.Format(", {0} échec(s)", report.FailedItems)
+                    : "";
                 string summary = string.Format(
-                    "Nettoyage terminé ! {0} dossier(s), {1} fichier(s), {2} entrée(s) de registre supprimés ({3} libérés).",
+                    "Nettoyage terminé ! {0} dossier(s), {1} fichier(s), {2} entrée(s) de registre supprimés ({3} libérés){4}{5}.",
                     report.DeletedDirectories,
                     report.DeletedFiles,
                     report.DeletedRegistryItems,
-                    FormatUtils.FormatBytes(report.FreedBytes));
+                    FormatUtils.FormatBytes(report.FreedBytes),
+                    extraReboot,
+                    extraFailed);
 
                 _txtStepStatus.Text = summary;
                 AppendLog("=== " + summary + " ===");

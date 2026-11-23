@@ -6,6 +6,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Markup;
 using System.Windows.Media;
+using System.Windows.Shell;
 
 namespace ClearVestige
 {
@@ -65,6 +66,196 @@ namespace ClearVestige
             if (window == null) return;
             var icon = AppIcon;
             if (icon != null) window.Icon = icon;
+        }
+
+        /// <summary>
+        /// Configure une barre de titre sombre personnalisée (style SysPulse) via WPF WindowChrome
+        /// tout en conservant le redimensionnement, Aero Snap et le comportement Maximisé natif Windows.
+        /// </summary>
+        public static Border ConfigureCustomChrome(Window window, double captionHeight, UIElement innerContent, bool allowResize)
+        {
+            window.WindowStyle = WindowStyle.None;
+            window.ResizeMode = allowResize ? ResizeMode.CanResize : ResizeMode.NoResize;
+
+            var chrome = new WindowChrome
+            {
+                CaptionHeight = captionHeight,
+                ResizeBorderThickness = allowResize ? new Thickness(6) : new Thickness(0),
+                GlassFrameThickness = new Thickness(0),
+                CornerRadius = new CornerRadius(0),
+                UseAeroCaptionButtons = false
+            };
+            WindowChrome.SetWindowChrome(window, chrome);
+
+            var frameBorder = new Border
+            {
+                Background = BrushFromHex("#0F172A"),
+                BorderBrush = BrushFromHex("#1E293B"),
+                BorderThickness = new Thickness(1),
+                Child = innerContent
+            };
+
+            window.StateChanged += (s, e) =>
+            {
+                if (window.WindowState == WindowState.Maximized)
+                {
+                    frameBorder.Margin = new Thickness(7);
+                    frameBorder.BorderThickness = new Thickness(0);
+                }
+                else
+                {
+                    frameBorder.Margin = new Thickness(0);
+                    frameBorder.BorderThickness = new Thickness(1);
+                }
+            };
+
+            return frameBorder;
+        }
+
+        /// <summary>
+        /// Crée le séparateur vertical et les boutons natifs Réduire / Agrandir / Fermer (style SysPulse).
+        /// </summary>
+        public static StackPanel CreateWindowCaptionControls(Window window, bool allowMaximize)
+        {
+            var panel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            // Séparateur vertical subtil avant les contrôles de fenêtre
+            var divider = new Border
+            {
+                Width = 1,
+                Height = 22,
+                Background = BrushFromHex("#26354D"),
+                Margin = new Thickness(10, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            panel.Children.Add(divider);
+
+            var btnMin = CreateChromeButton("\u2500", "Réduire", false);
+            btnMin.FontSize = 11;
+            btnMin.Click += (s, e) => window.WindowState = WindowState.Minimized;
+            panel.Children.Add(btnMin);
+
+            if (allowMaximize)
+            {
+                var btnMax = CreateChromeButton("\u25A1", "Agrandir / Restaurer", false);
+                btnMax.FontSize = 12;
+                btnMax.Click += (s, e) =>
+                {
+                    window.WindowState = window.WindowState == WindowState.Maximized
+                        ? WindowState.Normal
+                        : WindowState.Maximized;
+                };
+                window.StateChanged += (s, e) =>
+                {
+                    btnMax.Content = window.WindowState == WindowState.Maximized ? "\u2750" : "\u25A1";
+                };
+                panel.Children.Add(btnMax);
+            }
+
+            var btnClose = CreateChromeButton("\u2715", "Fermer", true);
+            btnClose.FontSize = 12;
+            btnClose.Click += (s, e) => window.Close();
+            panel.Children.Add(btnClose);
+
+            return panel;
+        }
+
+        private static Button CreateChromeButton(string glyph, string tooltip, bool isClose)
+        {
+            var btn = new Button
+            {
+                Content = glyph,
+                Width = 34,
+                Height = 30,
+                Margin = new Thickness(2, 0, 0, 0),
+                ToolTip = tooltip,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                HorizontalContentAlignment = HorizontalAlignment.Center
+            };
+            WindowChrome.SetIsHitTestVisibleInChrome(btn, true);
+
+            if (_darkDictionary != null)
+            {
+                string key = isClose ? "ChromeCloseButton" : "ChromeCaptionButton";
+                if (_darkDictionary.Contains(key))
+                {
+                    btn.Style = (Style)_darkDictionary[key];
+                }
+            }
+            return btn;
+        }
+
+        /// <summary>
+        /// Barre de titre sombre compacte (44 px) pour les fenêtres secondaires et assistants.
+        /// </summary>
+        public static Border CreateCompactTitleBar(Window window, string titleText, string subtitleText, bool allowMaximize)
+        {
+            var bar = new Border
+            {
+                Background = BrushFromHex("#0B1120"),
+                BorderBrush = BrushFromHex("#1E293B"),
+                BorderThickness = new Thickness(0, 0, 0, 1),
+                Padding = new Thickness(14, 0, 10, 0),
+                Height = 46
+            };
+
+            var dock = new DockPanel { LastChildFill = true };
+
+            var rightControls = CreateWindowCaptionControls(window, allowMaximize);
+            DockPanel.SetDock(rightControls, Dock.Right);
+            dock.Children.Add(rightControls);
+
+            var leftStack = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            if (AppIcon != null)
+            {
+                var ico = new Image
+                {
+                    Source = AppIcon,
+                    Width = 22,
+                    Height = 22,
+                    Margin = new Thickness(0, 0, 10, 0),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                RenderOptions.SetBitmapScalingMode(ico, BitmapScalingMode.HighQuality);
+                leftStack.Children.Add(ico);
+            }
+
+            var textStack = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            textStack.Children.Add(new TextBlock
+            {
+                Text = titleText,
+                FontSize = 13.5,
+                FontWeight = FontWeights.Bold,
+                Foreground = Brushes.White,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+
+            if (!string.IsNullOrWhiteSpace(subtitleText))
+            {
+                textStack.Children.Add(new TextBlock
+                {
+                    Text = "  •  " + subtitleText,
+                    FontSize = 11.5,
+                    Foreground = BrushFromHex("#94A3B8"),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                });
+            }
+
+            leftStack.Children.Add(textStack);
+            dock.Children.Add(leftStack);
+
+            bar.Child = dock;
+            return bar;
         }
 
         public static void ApplyDarkTheme(FrameworkElement target)
@@ -431,6 +622,69 @@ namespace ClearVestige
                         </Trigger>
                         <Trigger Property='IsDragging' Value='True'>
                             <Setter TargetName='thumbBorder' Property='Background' Value='#64748B'/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key='ChromeCaptionButton' TargetType='{x:Type Button}'>
+        <Setter Property='Background' Value='Transparent'/>
+        <Setter Property='Foreground' Value='#94A3B8'/>
+        <Setter Property='BorderThickness' Value='0'/>
+        <Setter Property='Cursor' Value='Hand'/>
+        <Setter Property='FocusVisualStyle' Value='{x:Null}'/>
+        <Setter Property='Template'>
+            <Setter.Value>
+                <ControlTemplate TargetType='{x:Type Button}'>
+                    <Border x:Name='bdr'
+                            Background='{TemplateBinding Background}'
+                            CornerRadius='6'
+                            SnapsToDevicePixels='True'>
+                        <ContentPresenter HorizontalAlignment='Center'
+                                          VerticalAlignment='Center'
+                                          TextElement.Foreground='{TemplateBinding Foreground}'/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property='IsMouseOver' Value='True'>
+                            <Setter TargetName='bdr' Property='Background' Value='#1E293B'/>
+                            <Setter Property='Foreground' Value='#F8FAFC'/>
+                        </Trigger>
+                        <Trigger Property='IsPressed' Value='True'>
+                            <Setter TargetName='bdr' Property='Background' Value='#334155'/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key='ChromeCloseButton' TargetType='{x:Type Button}'>
+        <Setter Property='Background' Value='Transparent'/>
+        <Setter Property='Foreground' Value='#94A3B8'/>
+        <Setter Property='BorderThickness' Value='0'/>
+        <Setter Property='Cursor' Value='Hand'/>
+        <Setter Property='FocusVisualStyle' Value='{x:Null}'/>
+        <Setter Property='Template'>
+            <Setter.Value>
+                <ControlTemplate TargetType='{x:Type Button}'>
+                    <Border x:Name='bdr'
+                            Background='{TemplateBinding Background}'
+                            CornerRadius='6'
+                            SnapsToDevicePixels='True'>
+                        <ContentPresenter HorizontalAlignment='Center'
+                                          VerticalAlignment='Center'
+                                          TextElement.Foreground='{TemplateBinding Foreground}'/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property='IsMouseOver' Value='True'>
+                            <Setter TargetName='bdr' Property='Background' Value='#DC2626'/>
+                            <Setter Property='Foreground' Value='#FFFFFF'/>
+                        </Trigger>
+                        <Trigger Property='IsPressed' Value='True'>
+                            <Setter TargetName='bdr' Property='Background' Value='#B91C1C'/>
+                            <Setter Property='Foreground' Value='#FFFFFF'/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

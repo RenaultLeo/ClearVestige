@@ -7,8 +7,8 @@ using System.Windows;
 [assembly: AssemblyDescription("Utilitaire autonome de désinstallation complète et de nettoyage en profondeur des résidus Windows")]
 [assembly: AssemblyCompany("ClearVestige")]
 [assembly: AssemblyProduct("ClearVestige")]
-[assembly: AssemblyVersion("1.4.0.0")]
-[assembly: AssemblyFileVersion("1.4.0.0")]
+[assembly: AssemblyVersion("1.5.0.0")]
+[assembly: AssemblyFileVersion("1.5.0.0")]
 
 namespace ClearVestige
 {

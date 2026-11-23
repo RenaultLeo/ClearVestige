@@ -17,6 +17,7 @@ namespace ClearVestige
         public int DeletedDirectories { get; set; }
         public int DeletedFiles { get; set; }
         public int DeletedRegistryItems { get; set; }
+        public int ScheduledForRebootItems { get; set; }
         public int FailedItems { get; set; }
         public long FreedBytes { get; set; }
         public string BackupFolderPath { get; set; }
@@ -26,6 +27,13 @@ namespace ClearVestige
         {
             Logs = new List<string>();
         }
+    }
+
+    internal enum DeleteOutcome
+    {
+        Deleted,
+        ScheduledForReboot,
+        Failed
     }
 
     public static class UninstallerEngine
@@ -295,26 +303,31 @@ namespace ClearVestige
 
         /// <summary>
         /// Ferme les processus actifs appartenant au dossier d'installation de l'application
+        /// (arrête les services associés sans les supprimer pour ne pas perturber le désinstallateur officiel).
         /// </summary>
         public static int KillRunningAppProcesses(string installLocation, List<string> logs = null)
         {
             if (string.IsNullOrWhiteSpace(installLocation) || AppScanner.IsProtectedSystemDirectory(installLocation))
                 return 0;
 
-            return StopServicesAndKillProcessesForPaths(new[] { installLocation }, logs);
+            return StopServicesAndKillProcessesForPaths(new[] { installLocation }, logs, false);
         }
 
         /// <summary>
-        /// Arrête les services Windows associés, tue les processus exécutés depuis les dossiers cibles
+        /// Arrête les services Windows associés, ferme proprement puis tue les processus exécutés depuis les dossiers cibles
         /// et utilise l'API Windows Restart Manager (rstrtmgr.dll) pour libérer les fichiers verrouillés.
         /// </summary>
-        public static int StopServicesAndKillProcessesForPaths(IEnumerable<string> targetPaths, List<string> logs = null)
+        public static int StopServicesAndKillProcessesForPaths(IEnumerable<string> targetPaths, List<string> logs = null, bool deleteServices = false)
         {
             if (targetPaths == null) return 0;
 
             var validDirs = new List<string>();
             var targetExeNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var candidateLockedFiles = new List<string>();
+            var lockableExts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ".exe", ".dll", ".asar", ".pak", ".db", ".sqlite", ".log"
+            };
 
             foreach (var raw in targetPaths)
             {
@@ -335,10 +348,8 @@ namespace ClearVestige
                                     string exeNoExt = Path.GetFileNameWithoutExtension(f);
                                     if (!string.IsNullOrWhiteSpace(exeNoExt) && exeNoExt.Length >= 4)
                                         targetExeNames.Add(exeNoExt);
-                                    if (candidateLockedFiles.Count < 64)
-                                        candidateLockedFiles.Add(f);
                                 }
-                                else if (string.Equals(ext, ".dll", StringComparison.OrdinalIgnoreCase) && candidateLockedFiles.Count < 64)
+                                if (lockableExts.Contains(ext) && candidateLockedFiles.Count < 128)
                                 {
                                     candidateLockedFiles.Add(f);
                                 }
@@ -360,9 +371,9 @@ namespace ClearVestige
             int totalKilled = 0;
 
             // 1. Arrêter les services Windows dont l'exécutable pointe vers l'un des dossiers cibles
-            StopMatchingWindowsServices(validDirs, logs);
+            StopMatchingWindowsServices(validDirs, logs, deleteServices);
 
-            // 2. Tuer uniquement les processus de l'application (ne JAMAIS tuer un processus système Windows ou explorer.exe)
+            // 2. Fermer proprement puis tuer uniquement les processus de l'application (ne JAMAIS tuer un processus système Windows ou explorer.exe)
             int currentPid = Process.GetCurrentProcess().Id;
             var protectedProcessNames = GetProtectedSystemProcessNames();
 
@@ -399,8 +410,22 @@ namespace ClearVestige
 
                     if (shouldKill)
                     {
-                        proc.Kill();
-                        proc.WaitForExit(3000);
+                        bool closedGracefully = false;
+                        try
+                        {
+                            if (proc.CloseMainWindow())
+                            {
+                                closedGracefully = proc.WaitForExit(800);
+                            }
+                        }
+                        catch { }
+
+                        if (!closedGracefully && !proc.HasExited)
+                        {
+                            proc.Kill();
+                            proc.WaitForExit(3000);
+                        }
+
                         totalKilled++;
                         if (logs != null)
                             logs.Add(string.Format("[Processus arrêté] {0} (PID {1})", pName, proc.Id));
@@ -457,9 +482,11 @@ namespace ClearVestige
             return false;
         }
 
-        private static void StopMatchingWindowsServices(List<string> validDirs, List<string> logs)
+        private static void StopMatchingWindowsServices(List<string> validDirs, List<string> logs, bool deleteServices)
         {
             if (validDirs == null || validDirs.Count == 0) return;
+            string winDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows).TrimEnd('\\', '/');
+
             try
             {
                 using (var baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
@@ -473,19 +500,38 @@ namespace ClearVestige
                             using (var svcKey = servicesKey.OpenSubKey(svcName, false))
                             {
                                 if (svcKey == null) continue;
-                                string imagePath = (svcKey.GetValue("ImagePath") ?? "").ToString();
-                                if (string.IsNullOrWhiteSpace(imagePath)) continue;
+                                string rawImagePath = (svcKey.GetValue("ImagePath") ?? "").ToString();
+                                if (string.IsNullOrWhiteSpace(rawImagePath)) continue;
 
-                                bool matches = validDirs.Any(d => imagePath.IndexOf(d, StringComparison.OrdinalIgnoreCase) >= 0);
+                                string expandedPath = Environment.ExpandEnvironmentVariables(rawImagePath);
+                                string svcExe = AppScanner.ExtractExecutablePath(expandedPath) ?? expandedPath;
+
+                                // Ne JAMAIS toucher à un service système Windows (svchost.exe, drivers dans C:\Windows\...)
+                                if (!string.IsNullOrWhiteSpace(winDir) &&
+                                    svcExe.StartsWith(winDir + "\\", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    continue;
+                                }
+
+                                bool matches = validDirs.Any(d =>
+                                    svcExe.StartsWith(d + "\\", StringComparison.OrdinalIgnoreCase) ||
+                                    string.Equals(svcExe, d, StringComparison.OrdinalIgnoreCase));
+
                                 if (matches)
                                 {
                                     RunCommandSilent("sc.exe", string.Format("stop \"{0}\"", svcName), 4000);
-                                    if (IsRunningAsAdmin())
+                                    WaitForServiceStopped(svcName, 4000);
+
+                                    if (deleteServices && IsRunningAsAdmin())
                                     {
                                         RunCommandSilent("sc.exe", string.Format("delete \"{0}\"", svcName), 3000);
+                                        if (logs != null)
+                                            logs.Add(string.Format("[Service Windows arrêté & supprimé] {0}", svcName));
                                     }
-                                    if (logs != null)
+                                    else if (logs != null)
+                                    {
                                         logs.Add(string.Format("[Service Windows arrêté] {0}", svcName));
+                                    }
                                 }
                             }
                         }
@@ -494,6 +540,37 @@ namespace ClearVestige
                 }
             }
             catch { }
+        }
+
+        private static void WaitForServiceStopped(string serviceName, int maxWaitMs)
+        {
+            var sw = Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < maxWaitMs)
+            {
+                try
+                {
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = "sc.exe",
+                        Arguments = string.Format("query \"{0}\"", serviceName),
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardOutput = true
+                    };
+                    using (var p = Process.Start(psi))
+                    {
+                        string output = p.StandardOutput.ReadToEnd();
+                        p.WaitForExit(1500);
+                        if (output.IndexOf("STOPPED", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            output.IndexOf("1060", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            return;
+                        }
+                    }
+                }
+                catch { return; }
+                System.Threading.Thread.Sleep(350);
+            }
         }
 
         private static int KillLockingProcessesWithRestartManager(
@@ -681,9 +758,10 @@ namespace ClearVestige
                 string installDir = (!string.IsNullOrWhiteSpace(app.InstallLocation) && !AppScanner.IsProtectedSystemDirectory(app.InstallLocation))
                     ? app.InstallLocation.TrimEnd('\\', '/')
                     : null;
+                string normalizedApp = LeftoverScanner.NormalizeAppName(app.DisplayName).Replace(" ", "");
                 int currentPid = Process.GetCurrentProcess().Id;
 
-                // Surveiller jusqu'à ce que tous les processus de désinstallation lancés après le clic soient fermés (max 15 min)
+                // Surveiller jusqu'à ce que tous les sous-processus de désinstallation soient fermés (max 15 min)
                 for (int attempt = 0; attempt < 900; attempt++)
                 {
                     bool anyUninstallerRunning = false;
@@ -698,8 +776,19 @@ namespace ClearVestige
                             string pPath = null;
                             try { pPath = p.MainModule != null ? p.MainModule.FileName : null; } catch { }
 
-                            // 1) Nouveau processus lancé depuis %TEMP% ou Windows\Temp (cas classique InnoSetup _iu*.tmp / NSIS Au_.exe)
-                            if (!string.IsNullOrWhiteSpace(pPath) &&
+                            bool looksLikeUninstallerName =
+                                pName.IndexOf("unins", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                pName.IndexOf("setup", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                pName.IndexOf("install", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                pName.IndexOf("remove", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                pName.StartsWith("_iu", StringComparison.OrdinalIgnoreCase) ||
+                                pName.StartsWith("~nsu", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(pName, "Au_", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(pName, "msiexec", StringComparison.OrdinalIgnoreCase) ||
+                                (normalizedApp.Length >= 4 && pName.Replace(" ", "").IndexOf(normalizedApp, StringComparison.OrdinalIgnoreCase) >= 0);
+
+                            // 1) Nouveau processus de désinstallation lancé depuis %TEMP% ou Windows\Temp (InnoSetup _iu*.tmp, NSIS Au_.exe, etc.)
+                            if (looksLikeUninstallerName && !string.IsNullOrWhiteSpace(pPath) &&
                                 (pPath.StartsWith(tempDir, StringComparison.OrdinalIgnoreCase) ||
                                  pPath.StartsWith(winTempDir, StringComparison.OrdinalIgnoreCase)))
                             {
@@ -715,10 +804,10 @@ namespace ClearVestige
                                 break;
                             }
 
-                            // 3) Nouveau processus nommé explicitement unins*, setup*, uninstall*, Au_
+                            // 3) Nouveau processus nommé explicitement unins*, _iu*, Au_, ~nsu*
                             if (pName.IndexOf("unins", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                                pName.IndexOf("setup", StringComparison.OrdinalIgnoreCase) >= 0 ||
                                 pName.StartsWith("_iu", StringComparison.OrdinalIgnoreCase) ||
+                                pName.StartsWith("~nsu", StringComparison.OrdinalIgnoreCase) ||
                                 string.Equals(pName, "Au_", StringComparison.OrdinalIgnoreCase))
                             {
                                 anyUninstallerRunning = true;
@@ -770,10 +859,7 @@ namespace ClearVestige
                 {
                     fileName = cmd.Substring(1, closingQuote - 1);
                     arguments = cmd.Substring(closingQuote + 1).Trim();
-                    if (silentMode && string.IsNullOrWhiteSpace(arguments))
-                    {
-                        arguments = "/S";
-                    }
+                    arguments = AppendSmartSilentFlags(fileName, arguments, silentMode);
                     return;
                 }
             }
@@ -783,7 +869,7 @@ namespace ClearVestige
             if (exeMatch.Success)
             {
                 fileName = exeMatch.Groups[1].Value.Trim();
-                arguments = exeMatch.Groups[2].Value.Trim();
+                arguments = AppendSmartSilentFlags(fileName, exeMatch.Groups[2].Value.Trim(), silentMode);
                 return;
             }
 
@@ -792,13 +878,45 @@ namespace ClearVestige
             if (firstSpace > 0)
             {
                 fileName = cmd.Substring(0, firstSpace);
-                arguments = cmd.Substring(firstSpace + 1).Trim();
+                arguments = AppendSmartSilentFlags(fileName, cmd.Substring(firstSpace + 1).Trim(), silentMode);
             }
             else
             {
                 fileName = cmd;
-                arguments = "";
+                arguments = AppendSmartSilentFlags(fileName, "", silentMode);
             }
+        }
+
+        private static string AppendSmartSilentFlags(string fileName, string arguments, bool silentMode)
+        {
+            if (!silentMode) return arguments;
+            string exeName = "";
+            try { exeName = Path.GetFileName(fileName ?? ""); } catch { }
+
+            // Inno Setup (unins000.exe, unins001.exe...)
+            if (Regex.IsMatch(exeName, @"^unins\d+\.exe$", RegexOptions.IgnoreCase))
+            {
+                if (arguments.IndexOf("SILENT", StringComparison.OrdinalIgnoreCase) < 0)
+                    return (arguments + " /VERYSILENT /SUPPRESSMSGBOXES /NORESTART").Trim();
+                return arguments;
+            }
+
+            // Squirrel (Discord, Slack, etc. : Update.exe --uninstall)
+            if (string.Equals(exeName, "Update.exe", StringComparison.OrdinalIgnoreCase) &&
+                arguments.IndexOf("--uninstall", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                if (arguments.IndexOf(" -s", StringComparison.OrdinalIgnoreCase) < 0)
+                    return (arguments + " -s").Trim();
+                return arguments;
+            }
+
+            // NSIS / Générique si aucun argument silencieux n'est présent
+            if (string.IsNullOrWhiteSpace(arguments))
+            {
+                return "/S";
+            }
+
+            return arguments;
         }
 
         /// <summary>
@@ -821,15 +939,24 @@ namespace ClearVestige
                 .ToList();
             if (diskPaths.Count > 0)
             {
-                StopServicesAndKillProcessesForPaths(diskPaths, report.Logs);
+                StopServicesAndKillProcessesForPaths(diskPaths, report.Logs, true);
             }
+
+            // Ordonner intelligemment la suppression : fichiers/raccourcis d'abord, puis dossiers du plus profond au moins profond, puis Registre
+            var orderedList = list
+                .OrderBy(i =>
+                    i.Type == LeftoverType.File || i.Type == LeftoverType.Shortcut ? 0 :
+                    i.Type == LeftoverType.Directory ? 1 :
+                    i.Type == LeftoverType.RegistryValue ? 2 : 3)
+                .ThenByDescending(i => i.Path != null ? i.Path.Length : 0)
+                .ToList();
 
             // Créer un dossier de sauvegarde horodaté si des clés de registre sont sélectionnées
             string safeAppName = Regex.Replace(appName ?? "Application", @"[^\w\-]", "_");
             string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             string sessionBackupDir = null;
 
-            if (backupRegistryBeforeDelete && list.Any(i => i.Type == LeftoverType.RegistryKey || i.Type == LeftoverType.RegistryValue))
+            if (backupRegistryBeforeDelete && orderedList.Any(i => i.Type == LeftoverType.RegistryKey || i.Type == LeftoverType.RegistryValue))
             {
                 sessionBackupDir = Path.Combine(BackupRootDirectory, string.Format("{0}_{1}", safeAppName, timestamp));
                 try
@@ -842,7 +969,7 @@ namespace ClearVestige
 
             int regBackupIndex = 1;
 
-            foreach (var item in list)
+            foreach (var item in orderedList)
             {
                 try
                 {
@@ -857,10 +984,23 @@ namespace ClearVestige
                             }
                             if (Directory.Exists(item.Path))
                             {
-                                DeleteDirectorySafe(item.Path, sendFilesToRecycleBin, report.Logs);
-                                report.DeletedDirectories++;
-                                report.FreedBytes += item.SizeBytes;
-                                report.Logs.Add("[Dossier supprimé] " + item.Path);
+                                DeleteOutcome dirOutcome = DeleteDirectorySafe(item.Path, sendFilesToRecycleBin, report.Logs);
+                                if (dirOutcome == DeleteOutcome.Deleted)
+                                {
+                                    report.DeletedDirectories++;
+                                    report.FreedBytes += item.SizeBytes;
+                                    report.Logs.Add("[Dossier supprimé] " + item.Path);
+                                }
+                                else if (dirOutcome == DeleteOutcome.ScheduledForReboot)
+                                {
+                                    report.ScheduledForRebootItems++;
+                                    report.Logs.Add("[Dossier planifié au redémarrage] " + item.Path);
+                                }
+                                else
+                                {
+                                    report.FailedItems++;
+                                    report.Logs.Add("[Échec Dossier] Impossible de supprimer : " + item.Path);
+                                }
                             }
                             break;
 
@@ -868,10 +1008,23 @@ namespace ClearVestige
                         case LeftoverType.Shortcut:
                             if (File.Exists(item.Path))
                             {
-                                DeleteFileSafe(item.Path, sendFilesToRecycleBin, report.Logs);
-                                report.DeletedFiles++;
-                                report.FreedBytes += item.SizeBytes;
-                                report.Logs.Add("[Fichier supprimé] " + item.Path);
+                                DeleteOutcome fileOutcome = DeleteFileSafe(item.Path, sendFilesToRecycleBin, report.Logs);
+                                if (fileOutcome == DeleteOutcome.Deleted)
+                                {
+                                    report.DeletedFiles++;
+                                    report.FreedBytes += item.SizeBytes;
+                                    report.Logs.Add("[Fichier supprimé] " + item.Path);
+                                }
+                                else if (fileOutcome == DeleteOutcome.ScheduledForReboot)
+                                {
+                                    report.ScheduledForRebootItems++;
+                                    report.Logs.Add("[Fichier planifié au redémarrage] " + item.Path);
+                                }
+                                else
+                                {
+                                    report.FailedItems++;
+                                    report.Logs.Add("[Échec Fichier] Impossible de supprimer : " + item.Path);
+                                }
                             }
                             break;
 
@@ -922,21 +1075,27 @@ namespace ClearVestige
             return report;
         }
 
-        private static void DeleteDirectorySafe(string dirPath, bool useRecycleBin, List<string> logs = null)
+        private static DeleteOutcome DeleteDirectorySafe(string dirPath, bool useRecycleBin, List<string> logs = null)
         {
             // 1. Tenter l'envoi silencieux à la Corbeille SANS popup bloquante Windows ("Dossier en cours d'utilisation")
             if (useRecycleBin && dirPath.IndexOf("WindowsApps", StringComparison.OrdinalIgnoreCase) < 0)
             {
                 if (SendToRecycleBinSilent(dirPath) && !Directory.Exists(dirPath))
-                    return;
+                    return DeleteOutcome.Deleted;
             }
 
             // 2. Suppression directe ou granulaire (avec déverrouillage et évacuation des DLL chargées dans Explorer)
             try
             {
-                ClearReadOnlyAttributes(new DirectoryInfo(dirPath));
+                var rootDi = new DirectoryInfo(dirPath);
+                if ((rootDi.Attributes & FileAttributes.ReparsePoint) != 0)
+                {
+                    rootDi.Delete();
+                    if (!Directory.Exists(dirPath)) return DeleteOutcome.Deleted;
+                }
+                ClearReadOnlyAttributes(rootDi);
                 Directory.Delete(dirPath, true);
-                if (!Directory.Exists(dirPath)) return;
+                if (!Directory.Exists(dirPath)) return DeleteOutcome.Deleted;
             }
             catch
             {
@@ -948,23 +1107,25 @@ namespace ClearVestige
 
             if (Directory.Exists(dirPath))
             {
-                ForceEvictAndDeleteDirectory(dirPath, logs);
+                return ForceEvictAndDeleteDirectory(dirPath, logs, true);
             }
+
+            return DeleteOutcome.Deleted;
         }
 
-        private static void DeleteFileSafe(string filePath, bool useRecycleBin, List<string> logs = null)
+        private static DeleteOutcome DeleteFileSafe(string filePath, bool useRecycleBin, List<string> logs = null)
         {
             if (useRecycleBin && filePath.IndexOf("WindowsApps", StringComparison.OrdinalIgnoreCase) < 0)
             {
                 if (SendToRecycleBinSilent(filePath) && !File.Exists(filePath))
-                    return;
+                    return DeleteOutcome.Deleted;
             }
 
             try
             {
                 try { File.SetAttributes(filePath, FileAttributes.Normal); } catch { }
                 File.Delete(filePath);
-                if (!File.Exists(filePath)) return;
+                if (!File.Exists(filePath)) return DeleteOutcome.Deleted;
             }
             catch
             {
@@ -976,19 +1137,24 @@ namespace ClearVestige
 
             if (File.Exists(filePath))
             {
-                EvictOrScheduleSingleFile(filePath, logs);
+                return EvictOrScheduleSingleFile(filePath, logs);
             }
+
+            return DeleteOutcome.Deleted;
         }
 
         /// <summary>
-        /// Supprime récursivement tous les fichiers possibles et évacue vers %TEMP% (ou planifie au redémarrage)
-        /// les DLL/EXE encore chargés dans explorer.exe afin que le dossier cible puisse être supprimé immédiatement.
+        /// Supprime récursivement tous les fichiers possibles (y compris chemins longs > 260 car.)
+        /// et évacue vers %TEMP% (ou planifie au redémarrage) les DLL/EXE encore chargés dans explorer.exe.
         /// </summary>
-        private static void ForceEvictAndDeleteDirectory(string dirPath, List<string> logs)
+        private static DeleteOutcome ForceEvictAndDeleteDirectory(string dirPath, List<string> logs, bool isRootCall)
         {
-            if (!Directory.Exists(dirPath)) return;
+            if (!Directory.Exists(dirPath)) return DeleteOutcome.Deleted;
 
-            StopServicesAndKillProcessesForPaths(new[] { dirPath }, logs);
+            if (isRootCall)
+            {
+                StopServicesAndKillProcessesForPaths(new[] { dirPath }, logs, true);
+            }
 
             try
             {
@@ -1005,7 +1171,7 @@ namespace ClearVestige
                     }
                     catch { }
 
-                    ForceEvictAndDeleteDirectory(subDir, logs);
+                    ForceEvictAndDeleteDirectory(subDir, logs, false);
                 }
             }
             catch { }
@@ -1024,10 +1190,14 @@ namespace ClearVestige
                 var rootInfo = new DirectoryInfo(dirPath);
                 rootInfo.Attributes = FileAttributes.Normal;
                 Directory.Delete(dirPath, true);
-                return;
+                if (!Directory.Exists(dirPath)) return DeleteOutcome.Deleted;
             }
             catch
             {
+                // Fallback Win32 chemin long (\\?\...) pour contourner la limite MAX_PATH (260 car.)
+                if (TryDeleteLongPathDirectory(dirPath) && !Directory.Exists(dirPath))
+                    return DeleteOutcome.Deleted;
+
                 // Si le dossier ne peut pas être supprimé sur place (poignée ouverte sur le dossier),
                 // tenter de le déplacer vers %TEMP% sur le même volume (sans jamais tuer explorer.exe)
                 try
@@ -1041,29 +1211,34 @@ namespace ClearVestige
                         MoveFileEx(trashDir, null, MOVEFILE_DELAY_UNTIL_REBOOT);
                         if (logs != null)
                             logs.Add("[Dossier verrouillé évacué vers %TEMP% & nettoyé au redémarrage] " + dirPath);
-                        return;
+                        if (!Directory.Exists(dirPath)) return DeleteOutcome.Deleted;
                     }
                 }
                 catch { }
 
                 // Dernier recours : programmer la suppression au redémarrage du noyau Windows
-                MoveFileEx(dirPath, null, MOVEFILE_DELAY_UNTIL_REBOOT);
-                if (logs != null)
-                    logs.Add("[Planifié au redémarrage] Dossier : " + dirPath);
+                if (MoveFileEx(dirPath, null, MOVEFILE_DELAY_UNTIL_REBOOT))
+                    return DeleteOutcome.ScheduledForReboot;
             }
+
+            return Directory.Exists(dirPath) ? DeleteOutcome.Failed : DeleteOutcome.Deleted;
         }
 
-        private static void EvictOrScheduleSingleFile(string filePath, List<string> logs)
+        private static DeleteOutcome EvictOrScheduleSingleFile(string filePath, List<string> logs)
         {
-            if (!File.Exists(filePath)) return;
+            if (!File.Exists(filePath)) return DeleteOutcome.Deleted;
 
             try
             {
                 File.SetAttributes(filePath, FileAttributes.Normal);
                 File.Delete(filePath);
-                return;
+                if (!File.Exists(filePath)) return DeleteOutcome.Deleted;
             }
-            catch { }
+            catch
+            {
+                if (TryDeleteLongPathFile(filePath) && !File.Exists(filePath))
+                    return DeleteOutcome.Deleted;
+            }
 
             // Si c'est une DLL d'extension Shell COM, la désenregistrer proprement du Registre sans toucher à explorer.exe
             if (filePath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
@@ -1078,14 +1253,12 @@ namespace ClearVestige
                 {
                     File.SetAttributes(filePath, FileAttributes.Normal);
                     File.Delete(filePath);
-                    return;
+                    if (!File.Exists(filePath)) return DeleteOutcome.Deleted;
                 }
                 catch { }
             }
 
-            // Astuce NTFS : un fichier .dll/.exe chargé en mémoire (ex: extension shell dans explorer.exe) ne peut pas
-            // être supprimé directement, mais Windows NTFS autorise de le DÉPLACER/RENOMMER sur le même disque SANS tuer explorer.exe !
-            // En le déplaçant dans %TEMP%, le dossier d'origine devient vide et peut être supprimé tout de suite.
+            // Déplacement NTFS sur le même volume vers %TEMP% pour vider le dossier d'origine sans fermer explorer.exe
             try
             {
                 string rootDrive = Path.GetPathRoot(filePath);
@@ -1104,14 +1277,45 @@ namespace ClearVestige
                 MoveFileEx(targetTrashPath, null, MOVEFILE_DELAY_UNTIL_REBOOT);
                 if (logs != null)
                     logs.Add("[Fichier verrouillé évacué hors du dossier & nettoyé au redémarrage] " + Path.GetFileName(filePath));
-                return;
+                return DeleteOutcome.Deleted;
             }
             catch { }
 
             // Dernier recours : suppression noyau au prochain démarrage
-            MoveFileEx(filePath, null, MOVEFILE_DELAY_UNTIL_REBOOT);
-            if (logs != null)
-                logs.Add("[Fichier verrouillé planifié pour suppression au redémarrage] " + filePath);
+            if (MoveFileEx(filePath, null, MOVEFILE_DELAY_UNTIL_REBOOT))
+                return DeleteOutcome.ScheduledForReboot;
+
+            return DeleteOutcome.Failed;
+        }
+
+        private static string ToExtendedPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return path;
+            if (path.StartsWith(@"\\?\")) return path;
+            if (path.StartsWith(@"\\")) return @"\\?\UNC\" + path.Substring(2);
+            return @"\\?\" + path;
+        }
+
+        private static bool TryDeleteLongPathFile(string filePath)
+        {
+            try
+            {
+                string ext = ToExtendedPath(filePath);
+                SetFileAttributesW(ext, 0x80); // FILE_ATTRIBUTE_NORMAL
+                return DeleteFileW(ext);
+            }
+            catch { return false; }
+        }
+
+        private static bool TryDeleteLongPathDirectory(string dirPath)
+        {
+            try
+            {
+                string ext = ToExtendedPath(dirPath);
+                SetFileAttributesW(ext, 0x80);
+                return RemoveDirectoryW(ext);
+            }
+            catch { return false; }
         }
 
         private static bool SendToRecycleBinSilent(string path)
@@ -1152,6 +1356,15 @@ namespace ClearVestige
             catch { }
         }
 
+        private static string GetTakeOwnYesChar()
+        {
+            string lang = System.Globalization.CultureInfo.InstalledUICulture.TwoLetterISOLanguageName.ToLowerInvariant();
+            if (lang == "fr") return "O";
+            if (lang == "de" || lang == "nl") return "J";
+            if (lang == "es" || lang == "pt" || lang == "it") return "S";
+            return "Y";
+        }
+
         private static void UnlockProtectedPath(string targetPath, bool isDirectory)
         {
             if (string.IsNullOrWhiteSpace(targetPath) || AppScanner.IsProtectedSystemDirectory(targetPath))
@@ -1159,35 +1372,44 @@ namespace ClearVestige
 
             try
             {
-                var psiTakeOwn = new ProcessStartInfo
+                string yesChar = GetTakeOwnYesChar();
+                string takeOwnArgs = isDirectory
+                    ? string.Format("/F \"{0}\" /R /A /D {1}", targetPath, yesChar)
+                    : string.Format("/F \"{0}\" /A", targetPath);
+
+                int exitCode = RunCommandSilentWithExitCode("takeown.exe", takeOwnArgs, 10000);
+                if (isDirectory && exitCode != 0 && yesChar != "Y")
                 {
-                    FileName = "takeown.exe",
-                    Arguments = isDirectory
-                        ? string.Format("/F \"{0}\" /R /A /D O", targetPath)
-                        : string.Format("/F \"{0}\" /A", targetPath),
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-                using (var p = Process.Start(psiTakeOwn))
-                {
-                    if (p != null) p.WaitForExit(10000);
+                    RunCommandSilentWithExitCode("takeown.exe", string.Format("/F \"{0}\" /R /A /D Y", targetPath), 10000);
                 }
 
-                var psiIcacls = new ProcessStartInfo
+                string icaclsArgs = isDirectory
+                    ? string.Format("\"{0}\" /grant *S-1-5-32-544:F /T /C /Q", targetPath)
+                    : string.Format("\"{0}\" /grant *S-1-5-32-544:F /C /Q", targetPath);
+                RunCommandSilentWithExitCode("icacls.exe", icaclsArgs, 10000);
+            }
+            catch { }
+        }
+
+        private static int RunCommandSilentWithExitCode(string fileName, string arguments, int timeoutMs)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo
                 {
-                    FileName = "icacls.exe",
-                    Arguments = isDirectory
-                        ? string.Format("\"{0}\" /grant *S-1-5-32-544:F /T /C /Q", targetPath)
-                        : string.Format("\"{0}\" /grant *S-1-5-32-544:F /C /Q", targetPath),
+                    FileName = fileName,
+                    Arguments = arguments,
                     UseShellExecute = false,
                     CreateNoWindow = true
                 };
-                using (var p = Process.Start(psiIcacls))
+                using (var p = Process.Start(psi))
                 {
-                    if (p != null) p.WaitForExit(10000);
+                    if (p != null && p.WaitForExit(timeoutMs))
+                        return p.ExitCode;
                 }
             }
             catch { }
+            return -1;
         }
 
         private static void ClearReadOnlyAttributes(DirectoryInfo dir)
@@ -1237,11 +1459,18 @@ namespace ClearVestige
             if (!ParseRegistryDisplayPath(displayKeyPath, out hive, out view, out subKey))
                 return false;
 
-            // Protection critique contre la suppression de clés racines
-            if (string.IsNullOrWhiteSpace(subKey) ||
-                string.Equals(subKey, "Software", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(subKey, @"Software\Microsoft", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(subKey, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", StringComparison.OrdinalIgnoreCase))
+            // Protection critique contre la suppression de clés racines ou système
+            string normSub = subKey.Trim('\\');
+            if (string.IsNullOrWhiteSpace(normSub) ||
+                string.Equals(normSub, "Software", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normSub, @"Software\Classes", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normSub, @"Software\Microsoft", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normSub, @"Software\Microsoft\Windows", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normSub, @"Software\Microsoft\Windows\CurrentVersion", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normSub, @"Software\Microsoft\Windows\CurrentVersion\Uninstall", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normSub, @"Software\Microsoft\Windows\CurrentVersion\Run", StringComparison.OrdinalIgnoreCase) ||
+                normSub.StartsWith(@"SYSTEM\", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normSub, "SYSTEM", StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
@@ -1352,6 +1581,15 @@ namespace ClearVestige
 
         [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         private static extern bool MoveFileEx(string lpExistingFileName, string lpNewFileName, int dwFlags);
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern bool DeleteFileW(string lpFileName);
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern bool RemoveDirectoryW(string lpPathName);
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern bool SetFileAttributesW(string lpFileName, uint dwFileAttributes);
 
         [StructLayout(LayoutKind.Sequential)]
         private struct RM_UNIQUE_PROCESS

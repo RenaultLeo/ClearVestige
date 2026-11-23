@@ -337,19 +337,19 @@ namespace ClearVestige
             ScanRegistryValuesReferencingPath(
                 RegistryHive.CurrentUser, RegistryView.Registry64,
                 @"Software\Microsoft\Windows\CurrentVersion\Run",
-                "HKCU\\...\\Run", "Démarrage automatique Windows",
+                @"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "Démarrage automatique Windows",
                 installDir, nameTokens, items, seenPaths);
 
             ScanRegistryValuesReferencingPath(
                 RegistryHive.LocalMachine, RegistryView.Registry64,
                 @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
-                "HKLM\\...\\Run", "Démarrage automatique Windows (Système)",
+                @"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run", "Démarrage automatique Windows (Système)",
                 installDir, nameTokens, items, seenPaths);
 
             ScanRegistryValuesReferencingPath(
                 RegistryHive.LocalMachine, RegistryView.Registry32,
                 @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run",
-                "HKLM\\WOW6432Node\\...\\Run", "Démarrage automatique Windows (32-bit)",
+                @"HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run", "Démarrage automatique Windows (32-bit)",
                 installDir, nameTokens, items, seenPaths);
 
             if (!string.IsNullOrWhiteSpace(installDir))
@@ -575,7 +575,13 @@ namespace ClearVestige
 
                         if (matches) continue;
 
-                        string displayPath = string.Format(@"{0}\SOFTWARE\{1}", label.StartsWith("HKCU") ? "HKCU" : "HKLM", keyName);
+                        string displayPath;
+                        if (hive == RegistryHive.CurrentUser)
+                            displayPath = @"HKCU\Software\" + keyName;
+                        else if (view == RegistryView.Registry32)
+                            displayPath = @"HKLM\SOFTWARE\WOW6432Node\" + keyName;
+                        else
+                            displayPath = @"HKLM\SOFTWARE\" + keyName;
                         if (!seenPaths.Add(displayPath)) continue;
 
                         orphans.Add(new OrphanCandidate

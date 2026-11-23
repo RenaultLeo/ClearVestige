@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
 namespace ClearVestige
@@ -123,10 +124,11 @@ namespace ClearVestige
                 }
                 else
                 {
-                    // Sauvegarder la clé Run avant suppression
+                    // Sauvegarder la clé Run avant suppression (nom de fichier assaini contre les caractères interdits)
+                    string safeName = Regex.Replace(item.Name ?? "Startup", @"[^\w\-]", "_");
                     string backupFile = Path.Combine(
                         UninstallerEngine.BackupRootDirectory,
-                        string.Format("Startup_{0}_{1:yyyyMMdd_HHmmss}.reg", item.Name, DateTime.Now));
+                        string.Format("Startup_{0}_{1:yyyyMMdd_HHmmss}.reg", safeName, DateTime.Now));
                     UninstallerEngine.ExportRegistryKey(item.RegistryPath, backupFile);
 
                     RegistryHive hive;
@@ -252,9 +254,21 @@ namespace ClearVestige
 
         private static void CleanFolderContents(string folderPath, CleanupReport report)
         {
+            CleanFolderContentsRecursive(folderPath, report, false);
+        }
+
+        /// <summary>
+        /// Supprime de manière granulaire tous les fichiers déverrouillés dans un dossier temporaire et ses sous-dossiers,
+        /// afin qu'un seul fichier verrouillé dans un sous-dossier n'empêche pas le nettoyage des autres fichiers.
+        /// </summary>
+        private static void CleanFolderContentsRecursive(string folderPath, CleanupReport report, bool deleteFolderIfEmpty)
+        {
             try
             {
                 var di = new DirectoryInfo(folderPath);
+                if (!di.Exists || (di.Attributes & FileAttributes.ReparsePoint) != 0)
+                    return;
+
                 foreach (var fi in di.GetFiles())
                 {
                     try
@@ -277,15 +291,26 @@ namespace ClearVestige
                     try
                     {
                         if ((sub.Attributes & FileAttributes.ReparsePoint) != 0) continue;
-                        long dirSize = AppScanner.FastCalculateDirectorySize(sub.FullName, 2);
-                        sub.Delete(true);
-                        report.DeletedDirectories++;
-                        report.FreedBytes += dirSize;
+                        CleanFolderContentsRecursive(sub.FullName, report, true);
                     }
                     catch
                     {
                         report.FailedItems++;
                     }
+                }
+
+                if (deleteFolderIfEmpty)
+                {
+                    try
+                    {
+                        if (!di.EnumerateFileSystemInfos().Any())
+                        {
+                            di.Attributes = FileAttributes.Normal;
+                            di.Delete(false);
+                            report.DeletedDirectories++;
+                        }
+                    }
+                    catch { }
                 }
             }
             catch { }

@@ -12,6 +12,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shell;
 
 namespace ClearVestige
 {
@@ -26,6 +27,7 @@ namespace ClearVestige
         private string _activeFilterTag = "ALL";
 
         // Contrôles Tableau de bord
+        private TextBlock _lblHeaderSubtitle;
         private TextBlock _lblTotalApps;
         private TextBlock _lblTotalSize;
         private TextBlock _lblStartupCount;
@@ -73,61 +75,37 @@ namespace ClearVestige
         {
             UiTheme.ApplyDarkTheme(this);
 
-            Title = "ClearVestige v1.4 — Désinstallateur Complet & Nettoyeur de Résidus";
+            Title = "ClearVestige v1.5 — Désinstallateur Complet & Nettoyeur de Résidus";
             UiTheme.ApplyAppIcon(this);
-            Width = 1240;
-            Height = 800;
-            MinWidth = 980;
-            MinHeight = 640;
+            Width = 1280;
+            Height = 820;
+            MinWidth = 1040;
+            MinHeight = 660;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Background = BrushFromHex("#0F172A");
             Foreground = Brushes.White;
             FontFamily = new FontFamily("Segoe UI");
 
-            var rootGrid = new Grid { Margin = new Thickness(20, 16, 20, 14) };
-            rootGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // En-tête + Cartes métriques
-            rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Onglets principaux
-            rootGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Barre d'état inférieure
+            // Grille externe : Ligne 0 = Barre de titre sombre intégrée (style SysPulse), Ligne 1 = Contenu principal
+            var outerGrid = new Grid();
+            outerGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            outerGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
             // =========================================================================
-            // 1. EN-TÊTE ET CARTES RÉCAPITULATIVES
+            // 0. BARRE DE TITRE SOMBRE INTÉGRÉE (STYLE SYSPULSE MONITOR)
             // =========================================================================
-            var topStack = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
+            var titleBarBorder = new Border
+            {
+                Background = BrushFromHex("#0B1120"),
+                BorderBrush = BrushFromHex("#1E293B"),
+                BorderThickness = new Thickness(0, 0, 0, 1),
+                Padding = new Thickness(18, 0, 12, 0),
+                Height = 64
+            };
 
-            var headerDock = new DockPanel { Margin = new Thickness(0, 0, 0, 14) };
-            var titleStack = new StackPanel { Orientation = Orientation.Vertical };
-            titleStack.Children.Add(new TextBlock
-            {
-                Text = "ClearVestige",
-                FontSize = 24,
-                FontWeight = FontWeights.Bold,
-                Foreground = Brushes.White
-            });
-            titleStack.Children.Add(new TextBlock
-            {
-                Text = "Désinstallation complète d'applications, suppression profonde des résidus (Fichiers & Registre) et optimisation",
-                FontSize = 12.5,
-                Foreground = BrushFromHex("#94A3B8"),
-                Margin = new Thickness(0, 2, 0, 0)
-            });
-            if (UiTheme.AppIcon != null)
-            {
-                var logo = new Image
-                {
-                    Source = UiTheme.AppIcon,
-                    Width = 52,
-                    Height = 52,
-                    Margin = new Thickness(0, 0, 14, 0),
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-                RenderOptions.SetBitmapScalingMode(logo, BitmapScalingMode.HighQuality);
-                DockPanel.SetDock(logo, Dock.Left);
-                headerDock.Children.Add(logo);
-            }
-            DockPanel.SetDock(titleStack, Dock.Left);
-            headerDock.Children.Add(titleStack);
+            var headerDock = new DockPanel { LastChildFill = true };
 
-            // Bouton / Badge Administrateur + Dossier Sauvegardes
+            // Partie droite : Badge Admin pill + Actualiser + Sauvegardes .reg + Séparateur + Contrôles fenêtre
             var rightHeaderStack = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -138,28 +116,43 @@ namespace ClearVestige
             bool isAdmin = UninstallerEngine.IsRunningAsAdmin();
             if (isAdmin)
             {
-                rightHeaderStack.Children.Add(new Border
+                var adminPill = new Border
                 {
-                    Background = BrushFromHex("#065F46"),
+                    Background = BrushFromHex("#064E3B"),
                     BorderBrush = BrushFromHex("#10B981"),
                     BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(6),
-                    Padding = new Thickness(12, 6, 12, 6),
+                    CornerRadius = new CornerRadius(15),
+                    Padding = new Thickness(13, 6, 13, 6),
                     Margin = new Thickness(0, 0, 10, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
                     Child = new TextBlock
                     {
-                        Text = "✓ Mode Administrateur Actif",
-                        Foreground = BrushFromHex("#A7F3D0"),
-                        FontWeight = FontWeights.SemiBold,
-                        FontSize = 12
+                        Text = "🛡️ MODE ADMIN",
+                        Foreground = BrushFromHex("#6EE7B7"),
+                        FontWeight = FontWeights.Bold,
+                        FontSize = 11.5
                     }
-                });
+                };
+                WindowChrome.SetIsHitTestVisibleInChrome(adminPill, true);
+                rightHeaderStack.Children.Add(adminPill);
             }
             else
             {
-                var btnElevate = CreateActionButton("⚡ Relancer en Administrateur", "#D97706", "#FFFFFF");
-                btnElevate.Margin = new Thickness(0, 0, 10, 0);
-                btnElevate.ToolTip = "Relance l'application avec les droits Administrateur pour désinstaller les logiciels système (HKLM)";
+                var btnElevate = new Button
+                {
+                    Content = "⚡ MODE ADMIN",
+                    Background = BrushFromHex("#78350F"),
+                    Foreground = BrushFromHex("#FDE68A"),
+                    BorderBrush = BrushFromHex("#F59E0B"),
+                    BorderThickness = new Thickness(1),
+                    FontWeight = FontWeights.Bold,
+                    FontSize = 11.5,
+                    Padding = new Thickness(13, 6, 13, 6),
+                    Margin = new Thickness(0, 0, 10, 0),
+                    Cursor = Cursors.Hand,
+                    ToolTip = "Relancer ClearVestige avec les droits Administrateur (recommandé pour les logiciels système HKLM)"
+                };
+                WindowChrome.SetIsHitTestVisibleInChrome(btnElevate, true);
                 btnElevate.Click += (s, e) =>
                 {
                     if (UninstallerEngine.RestartAsAdmin())
@@ -168,18 +161,104 @@ namespace ClearVestige
                 rightHeaderStack.Children.Add(btnElevate);
             }
 
-            var btnOpenBackups = CreateActionButton("📂 Sauvegardes Registre (.reg)", "#1E293B", "#E2E8F0");
+            var btnHeaderRefresh = new Button
+            {
+                Content = "🔄 Actualiser",
+                Background = BrushFromHex("#131D31"),
+                Foreground = BrushFromHex("#E2E8F0"),
+                BorderBrush = BrushFromHex("#334155"),
+                BorderThickness = new Thickness(1),
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 12,
+                Padding = new Thickness(12, 7, 12, 7),
+                Margin = new Thickness(0, 0, 8, 0),
+                Cursor = Cursors.Hand,
+                ToolTip = "Actualiser l'inventaire des applications, le démarrage et les fichiers temporaires"
+            };
+            WindowChrome.SetIsHitTestVisibleInChrome(btnHeaderRefresh, true);
+            btnHeaderRefresh.Click += async (s, e) => await RefreshAllDataAsync();
+            rightHeaderStack.Children.Add(btnHeaderRefresh);
+
+            var btnOpenBackups = new Button
+            {
+                Content = "📂 Sauvegardes .reg",
+                Background = BrushFromHex("#0E7490"),
+                Foreground = Brushes.White,
+                BorderBrush = BrushFromHex("#22D3EE"),
+                BorderThickness = new Thickness(1),
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 12,
+                Padding = new Thickness(13, 7, 13, 7),
+                Cursor = Cursors.Hand,
+                ToolTip = "Ouvrir le dossier local des sauvegardes automatiques du Registre (.reg)"
+            };
+            WindowChrome.SetIsHitTestVisibleInChrome(btnOpenBackups, true);
             btnOpenBackups.Click += (s, e) =>
             {
                 try { Process.Start("explorer.exe", "\"" + UninstallerEngine.BackupRootDirectory + "\""); } catch { }
             };
             rightHeaderStack.Children.Add(btnOpenBackups);
 
+            rightHeaderStack.Children.Add(UiTheme.CreateWindowCaptionControls(this, true));
+
             DockPanel.SetDock(rightHeaderStack, Dock.Right);
             headerDock.Children.Add(rightHeaderStack);
-            topStack.Children.Add(headerDock);
+
+            // Partie gauche : Icône arrondie + CLEARVESTIGE + infos PC temps réel
+            var leftHeaderStack = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            if (UiTheme.AppIcon != null)
+            {
+                var logo = new Image
+                {
+                    Source = UiTheme.AppIcon,
+                    Width = 38,
+                    Height = 38,
+                    Margin = new Thickness(0, 0, 12, 0),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                RenderOptions.SetBitmapScalingMode(logo, BitmapScalingMode.HighQuality);
+                leftHeaderStack.Children.Add(logo);
+            }
+
+            var titleStack = new StackPanel { Orientation = Orientation.Vertical, VerticalAlignment = VerticalAlignment.Center };
+            titleStack.Children.Add(new TextBlock
+            {
+                Text = "CLEARVESTIGE",
+                FontSize = 16.5,
+                FontWeight = FontWeights.ExtraBold,
+                Foreground = Brushes.White
+            });
+            _lblHeaderSubtitle = new TextBlock
+            {
+                Text = string.Format("{0}  •  v1.5  •  Analyse des applications en cours...", Environment.MachineName),
+                FontSize = 11.5,
+                Foreground = BrushFromHex("#94A3B8"),
+                Margin = new Thickness(0, 1, 0, 0),
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            titleStack.Children.Add(_lblHeaderSubtitle);
+            leftHeaderStack.Children.Add(titleStack);
+
+            headerDock.Children.Add(leftHeaderStack);
+            titleBarBorder.Child = headerDock;
+            Grid.SetRow(titleBarBorder, 0);
+            outerGrid.Children.Add(titleBarBorder);
+
+            // =========================================================================
+            // 1. CONTENU PRINCIPAL (CARTES MÉTRIQUES + ONGLETS + BARRE D'ÉTAT)
+            // =========================================================================
+            var rootGrid = new Grid { Margin = new Thickness(20, 14, 20, 14) };
+            rootGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Cartes métriques
+            rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // Onglets principaux
+            rootGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); // Barre d'état inférieure
 
             // Cartes statistiques
+            var topStack = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
             var cardsGrid = new Grid();
             for (int i = 0; i < 4; i++)
             {
@@ -261,7 +340,10 @@ namespace ClearVestige
             Grid.SetRow(statusBorder, 2);
             rootGrid.Children.Add(statusBorder);
 
-            Content = rootGrid;
+            Grid.SetRow(rootGrid, 1);
+            outerGrid.Children.Add(rootGrid);
+
+            Content = UiTheme.ConfigureCustomChrome(this, 64, outerGrid, true);
         }
 
         // =========================================================================
@@ -1069,6 +1151,11 @@ namespace ClearVestige
             long totalBytes = list.Sum(a => a.SizeBytes);
             _lblTotalApps.Text = string.Format("{0} / {1}", list.Count, _allApps.Count);
             _lblTotalSize.Text = FormatUtils.FormatBytes(totalBytes);
+            if (_lblHeaderSubtitle != null)
+            {
+                _lblHeaderSubtitle.Text = string.Format("{0}  •  v1.5  •  {1} applications  •  {2}",
+                    Environment.MachineName, _allApps.Count, FormatUtils.FormatBytes(_allApps.Sum(a => a.SizeBytes)));
+            }
             _lblStatusFooter.Text = string.Format("Prêt — {0} application(s) affichée(s) sur {1} détectée(s). Double-cliquez sur une ligne pour lancer la désinstallation complète.", list.Count, _allApps.Count);
 
             if (_gridApps != null && _gridApps.SelectedItem == null && _filteredApps.Count > 0)
@@ -1286,8 +1373,8 @@ namespace ClearVestige
             await RunForcedScanAsync();
 
             MessageBox.Show(this,
-                string.Format("Éradication terminée !\n• Dossiers supprimés : {0}\n• Fichiers supprimés : {1}\n• Entrées registre supprimées : {2}\n• Espace libéré : {3}",
-                    report.DeletedDirectories, report.DeletedFiles, report.DeletedRegistryItems, FormatUtils.FormatBytes(report.FreedBytes)),
+                string.Format("Éradication terminée !\n• Dossiers supprimés : {0}\n• Fichiers supprimés : {1}\n• Entrées registre supprimées : {2}\n• Planifiés au redémarrage : {3}\n• Échecs / ignorés : {4}\n• Espace libéré : {5}",
+                    report.DeletedDirectories, report.DeletedFiles, report.DeletedRegistryItems, report.ScheduledForRebootItems, report.FailedItems, FormatUtils.FormatBytes(report.FreedBytes)),
                 "Désinstallation Forcée Terminée", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
@@ -1358,8 +1445,8 @@ namespace ClearVestige
                 await RunAutoOrphansScanAsync();
 
                 MessageBox.Show(this,
-                    string.Format("Nettoyage des orphelins terminé !\n• Dossiers supprimés : {0}\n• Clés registre supprimées : {1}\n• Espace libéré : {2}",
-                        report.DeletedDirectories, report.DeletedRegistryItems, FormatUtils.FormatBytes(report.FreedBytes)),
+                    string.Format("Nettoyage des orphelins terminé !\n• Dossiers supprimés : {0}\n• Clés registre supprimées : {1}\n• Planifiés au redémarrage : {2}\n• Échecs / ignorés : {3}\n• Espace libéré : {4}",
+                        report.DeletedDirectories, report.DeletedRegistryItems, report.ScheduledForRebootItems, report.FailedItems, FormatUtils.FormatBytes(report.FreedBytes)),
                     "Nettoyage Terminé", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             finally
@@ -1551,7 +1638,7 @@ namespace ClearVestige
             {
                 Title = "Désinstallation Complète — ClearVestige",
                 Width = 580,
-                Height = 440,
+                Height = 480,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
                 Owner = this,
@@ -1562,7 +1649,15 @@ namespace ClearVestige
             UiTheme.ApplyDarkTheme(dlg);
             UiTheme.ApplyAppIcon(dlg);
 
-            var root = new Grid { Margin = new Thickness(22, 18, 22, 18) };
+            var dlgOuter = new Grid();
+            dlgOuter.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            dlgOuter.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            var dlgBar = UiTheme.CreateCompactTitleBar(dlg, "CLEARVESTIGE", "Auto-désinstallation", false);
+            Grid.SetRow(dlgBar, 0);
+            dlgOuter.Children.Add(dlgBar);
+
+            var root = new Grid { Margin = new Thickness(22, 16, 22, 18) };
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -1695,7 +1790,10 @@ namespace ClearVestige
             Grid.SetRow(footerDock, 3);
             root.Children.Add(footerDock);
 
-            dlg.Content = root;
+            Grid.SetRow(root, 1);
+            dlgOuter.Children.Add(root);
+
+            dlg.Content = UiTheme.ConfigureCustomChrome(dlg, 46, dlgOuter, false);
             dlg.Loaded += (s, e) => txtConfirm.Focus();
             dlg.ShowDialog();
         }

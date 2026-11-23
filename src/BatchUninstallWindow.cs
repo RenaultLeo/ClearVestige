@@ -85,7 +85,15 @@ namespace ClearVestige
             Foreground = Brushes.White;
             FontFamily = new FontFamily("Segoe UI");
 
-            var root = new Grid { Margin = new Thickness(20) };
+            var outerGrid = new Grid();
+            outerGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            outerGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            var titleBar = UiTheme.CreateCompactTitleBar(this, "CLEARVESTIGE", string.Format("Désinstallation multiple ({0} applications)", _queue.Count), true);
+            Grid.SetRow(titleBar, 0);
+            outerGrid.Children.Add(titleBar);
+
+            var root = new Grid { Margin = new Thickness(20, 14, 20, 18) };
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // 0 En-tête
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // 1 Options
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // 2 Barre d'action
@@ -331,7 +339,10 @@ namespace ClearVestige
             Grid.SetRow(footer, 6);
             root.Children.Add(footer);
 
-            Content = root;
+            Grid.SetRow(root, 1);
+            outerGrid.Children.Add(root);
+
+            Content = UiTheme.ConfigureCustomChrome(this, 46, outerGrid, true);
         }
 
         // =====================================================================
@@ -503,7 +514,7 @@ namespace ClearVestige
             SetBusy(true);
             try
             {
-                int dirs = 0, files = 0, regs = 0, failed = 0;
+                int dirs = 0, files = 0, regs = 0, reboot = 0, failed = 0;
                 long freed = 0;
                 var backupFolders = new List<string>();
 
@@ -530,6 +541,7 @@ namespace ClearVestige
                     dirs += report.DeletedDirectories;
                     files += report.DeletedFiles;
                     regs += report.DeletedRegistryItems;
+                    reboot += report.ScheduledForRebootItems;
                     failed += report.FailedItems;
                     freed += report.FreedBytes;
 
@@ -546,8 +558,9 @@ namespace ClearVestige
                 WasCleanedOrUninstalled = true;
                 UpdateSelectionCounters();
 
-                string summary = string.Format("Nettoyage terminé ! {0} dossier(s), {1} fichier(s), {2} entrée(s) de registre supprimés ({3} libérés){4}.",
+                string summary = string.Format("Nettoyage terminé ! {0} dossier(s), {1} fichier(s), {2} entrée(s) de registre supprimés ({3} libérés){4}{5}.",
                     dirs, files, regs, FormatUtils.FormatBytes(freed),
+                    reboot > 0 ? string.Format(", {0} planifié(s) au redémarrage", reboot) : "",
                     failed > 0 ? string.Format(", {0} élément(s) ignoré(s)", failed) : "");
                 _txtStepStatus.Text = summary;
                 AppendLog("=== " + summary + " ===");
