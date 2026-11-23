@@ -20,34 +20,32 @@
 
 ---
 
-## ✨ Fonctionnalités Principales (v1.4)
+## ✨ Fonctionnalités Principales (v2.0)
 
-### 1. 📦 Inventaire Complet des Applications Installées
-- Analyse simultanée du Registre Système 64-bit (`HKLM\SOFTWARE\...`), Système 32-bit (`WOW6432Node`), Utilisateur (`HKCU`), ainsi que des applications **Microsoft Store (`AppX`)** et composants système en option.
-- Calcul automatique de l'espace disque occupé et détection intelligente du dossier d'installation.
-- Recherche instantanée, tri par colonne (taille, date, éditeur) et filtres rapides (`64-bit`, `32-bit`, `Utilisateur`, `Volumineuses > 100 Mo`, `Installées récemment`).
-- Export complet de l'inventaire au format **CSV**.
+### 1. 📦 Inventaire Complet, Icônes Réelles & Sélection Persistante
+- **Vraies icônes Windows** chargées en arrière-plan pour chaque logiciel (`.exe`, `.ico`, Store AppX).
+- **Cases à cocher persistantes (`✓ Cochées (N)`)** : cherchez une 1ʳᵉ appli, cochez-la, cherchez-en une 2ᵉ, cochez-la — votre sélection est **conservée entre toutes vos recherches et filtres** avant de lancer la désinstallation par lot !
+- **Glisser-Déposer (Drag & Drop)** : déposez un raccourci du Bureau (`.lnk`), un `.exe` ou un dossier directement sur la fenêtre pour identifier et désinstaller le logiciel instantanément.
+- **Barre de titre sombre intégrée (WindowChrome)** avec sélecteur de langue **`🌐 FR / EN`**, colonnes redimensionnables avec info-bulles complètes, **Rapport HTML sombre autonome**, **Export CSV** et **Export Script Winget** (réinstallation en 1 clic).
 
 ### 2. 🗑️ Désinstallation en Profondeur (Simple & Multiple par Lot)
-- **Désinstallation individuelle ou par lot (`Ctrl + clic` / `Maj + clic`)** : sélectionnez plusieurs applications pour les désinstaller à la suite et regrouper l'analyse de leurs résidus dans une seule interface.
-- **Arrêt automatique des processus et services actifs de l'application** (avec l'API officielle *Windows Restart Manager* `rstrtmgr.dll`, tout en protégeant intégralement `explorer.exe` et les processus système Windows).
-- **Sauvegardes de sécurité avant nettoyage** :
-  - Export automatique des clés de registre supprimées au format `.reg` dans le dossier `Backups/`.
-  - Envoi des fichiers et dossiers vers la **Corbeille Windows** par défaut (`shell32.dll`).
-  - Création optionnelle d'un **Point de Restauration Système Windows**.
-- **Scan approfondi des résidus sur 3 niveaux (*Rapide*, *Standard*, *Profond*)** :
-  - Dossier d'installation principal, `%AppData%` (Roaming), `%LocalAppData%` (Local, LocalLow, Programs), `%ProgramData%`, `%ProgramFiles%`, `%ProgramFiles(x86)%` et sous-dossiers d'applications Store.
-  - Raccourcis orphelins du Bureau et du Menu Démarrer (`.lnk`, `.url`).
-  - Clés de registre `HKCU\Software`, `HKLM\SOFTWARE`, `HKLM\SOFTWARE\WOW6432Node`.
-  - Traces d'exécution avancées : Démarrage `Run`, `MuiCache`, `AppCompatFlags`, `CrashDumps`, `Prefetch` et `%TEMP%`.
+- Désinstallation individuelle ou par lot avec arrêt gracieux puis forcé des processus/services tiers (`rstrtmgr.dll`), support silencieux **MSI / Inno Setup / NSIS / Squirrel**, sauvegarde `.reg` automatique, Corbeille Windows et Point de Restauration.
+- Scan sur 3 niveaux (*Rapide*, *Standard*, *Profond*) incluant dossiers, raccourcis, clés Registre, entrées `Run`, `MuiCache`, `AppCompatFlags`, `CrashDumps`, `Prefetch`, chemins longs (`> 260 car.`) et **Tâches Planifiées Windows (`Scheduled Tasks`)**.
 
 ### 3. 🔍 Recherche d'Applications Orphelines (2 Modes)
-- **🎯 Traque Ciblée (Nom / Dossier / Exécutable)** : recherchez toutes les traces d'une application déjà désinstallée ou dont le désinstallateur est cassé en indiquant simplement son nom (même partiel ou avec espaces, ex: `one drive`, `VLC`) ou en sélectionnant son dossier/fichier résiduel.
-- **⚡ Détection Automatique Globale** : analyse `Program Files`, `ProgramData`, `AppData` et les ruches `Software` du Registre en les croisant avec la liste des applications installées pour identifier les dossiers et clés abandonnés.
+- **🎯 Traque Ciblée** (Nom avec/sans espaces, dossier ou `.exe`) et **⚡ Détection Automatique Globale** des dossiers et clés abandonnés.
 
-### 4. 🚀 Gestionnaire de Démarrage (Autorun) & 🧹 Nettoyeur de Fichiers Inutiles
-- Visualisation et suppression des programmes lancés automatiquement au démarrage de Windows (`HKCU\...\Run`, `HKLM\...\Run`, dossiers `Startup`), avec signalement des entrées orphelines.
-- Analyse et nettoyage en un clic des dossiers temporaires (`%TEMP%`, `Windows\Temp`, `CrashDumps`, rapports d'erreurs `WER`).
+### 4. 🚀 Outils Système & Démarrage (3 Sous-Onglets)
+- **🚀 Gestionnaire de Démarrage (`Autorun`)** : entrées `HKCU`/`HKLM Run` et dossiers `Startup`.
+- **🔌 Détecteur de Services Windows tiers orphelins** : détecte et supprime les services dont l'`.exe` a disparu (tous les services `C:\Windows\` sont protégés).
+- **🖱️ Nettoyeur du Menu Clic-Droit Windows** : repère et supprime (avec sauvegarde `.reg`) les entrées de menu contextuel tiers ou cassées.
+
+### 5. 🧹 Nettoyeur de Caches & Fichiers Inutiles
+- `%TEMP%`, `Windows\Temp`, `CrashDumps`, `WER`, **Cache Discord**, **Shaders GPU (DirectX / NVIDIA / AMD)**, **Caches Navigateurs (Chrome / Edge / Brave)**, **Delivery Optimization** et **Corbeille Windows**.
+
+### 6. 📸 Surveillance d'Installation (Snapshot Avant/Après) & 🗂️ Historique / Restauration `.reg`
+- **📸 Snapshot Avant / Après** : capturez l'état de votre PC avant d'installer un logiciel de test, puis comparez après pour voir **chaque dossier, raccourci, clé Registre et tâche planifiée ajoutés** et tout annuler proprement.
+- **🗂️ Historique & Restauration `.reg` en 1 clic** : suivi de l'espace total libéré, aperçu des fichiers `.reg` et restauration directe dans le Registre.
 
 ---
 

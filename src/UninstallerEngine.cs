@@ -1063,6 +1063,18 @@ namespace ClearVestige
                                 report.Logs.Add(string.Format("[Échec Valeur Registre] {0} -> {1}", item.Path, item.ValueName));
                             }
                             break;
+                        case LeftoverType.ScheduledTask:
+                            if (DeleteScheduledTask(item.Path))
+                            {
+                                report.DeletedRegistryItems++;
+                                report.Logs.Add("[Tâche Planifiée supprimée] " + item.Path);
+                            }
+                            else
+                            {
+                                report.FailedItems++;
+                                report.Logs.Add("[Échec Tâche Planifiée] " + item.Path + " (Droits Admin peut-être requis)");
+                            }
+                            break;
                     }
                 }
                 catch (Exception ex)
@@ -1072,7 +1084,18 @@ namespace ClearVestige
                 }
             }
 
+            HistoryAndBackupManager.RecordCleanup(appName, report);
             return report;
+        }
+
+        private static bool DeleteScheduledTask(string taskPath)
+        {
+            if (string.IsNullOrWhiteSpace(taskPath)) return false;
+            if (taskPath.StartsWith(@"\Microsoft\Windows\", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            int code = RunCommandSilentWithExitCode("schtasks.exe", string.Format("/Delete /TN \"{0}\" /F", taskPath), 6000);
+            return code == 0;
         }
 
         private static DeleteOutcome DeleteDirectorySafe(string dirPath, bool useRecycleBin, List<string> logs = null)

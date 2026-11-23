@@ -22,6 +22,7 @@ $cscArgs = @(
     "/out:$outExe",
     "/r:System.dll",
     "/r:System.Core.dll",
+    "/r:System.Drawing.dll",
     "/r:System.Xaml.dll",
     "/r:System.Windows.Forms.dll",
     "/r:Microsoft.VisualBasic.dll",

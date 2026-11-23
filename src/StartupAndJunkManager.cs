@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
@@ -161,48 +162,116 @@ namespace ClearVestige
         public static List<JunkCategory> ScanJunkCategories()
         {
             var categories = new List<JunkCategory>();
+            string localApp = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string roamingApp = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string winDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
 
             // 1. Temp Utilisateur
             AddJunkCategory(categories,
                 "Fichiers Temporaires Utilisateur (%TEMP%)",
                 Path.GetTempPath(),
-                "Fichiers temporaires créés par les installateurs et applications de votre session");
+                "Fichiers temporaires créés par les installateurs et applications de votre session", true);
 
             // 2. Temp Windows
-            string winTemp = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Temp");
             AddJunkCategory(categories,
                 "Fichiers Temporaires Système (Windows\\Temp)",
-                winTemp,
-                "Fichiers temporaires système et logs d'installation MSI");
+                Path.Combine(winDir, "Temp"),
+                "Fichiers temporaires système et logs d'installation MSI", true);
 
             // 3. CrashDumps
-            string crashDumps = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CrashDumps");
             AddJunkCategory(categories,
                 "Rapports de plantage (CrashDumps)",
-                crashDumps,
-                "Fichiers .dmp générés lors de la fermeture inattendue d'applications");
+                Path.Combine(localApp, "CrashDumps"),
+                "Fichiers .dmp générés lors de la fermeture inattendue d'applications", true);
 
             // 4. Rapports d'erreurs Windows (WER)
-            string werArchive = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"Microsoft\Windows\WER\ReportArchive");
             AddJunkCategory(categories,
                 "Archives de rapports d'erreurs Windows (WER)",
-                werArchive,
-                "Anciens rapports de diagnostic Windows Error Reporting");
+                Path.Combine(localApp, @"Microsoft\Windows\WER\ReportArchive"),
+                "Anciens rapports de diagnostic Windows Error Reporting", true);
+
+            // 5. Cache Discord
+            AddJunkCategory(categories,
+                "Cache Discord (Cache / Code Cache)",
+                Path.Combine(roamingApp, @"discord\Cache"),
+                "Images, médias et fichiers temporaires mis en cache par Discord", true);
+
+            // 6. Caches Shader GPU (DirectX, NVIDIA, AMD)
+            AddJunkCategory(categories,
+                "Cache DirectX Shader (D3DSCache)",
+                Path.Combine(localApp, "D3DSCache"),
+                "Shaders graphiques DirectX précompilés (régénérés automatiquement)", true);
+            AddJunkCategory(categories,
+                "Cache NVIDIA Shader (DXCache)",
+                Path.Combine(localApp, @"NVIDIA\DXCache"),
+                "Cache de shaders NVIDIA DirectX", true);
+            AddJunkCategory(categories,
+                "Cache AMD Shader (DxCache)",
+                Path.Combine(localApp, @"AMD\DxCache"),
+                "Cache de shaders AMD DirectX", true);
+
+            // 7. Caches Navigateurs (décochés par défaut pour laisser l'utilisateur choisir)
+            AddJunkCategory(categories,
+                "Cache Navigateur — Google Chrome",
+                Path.Combine(localApp, @"Google\Chrome\User Data\Default\Cache\Cache_Data"),
+                "Cache web Chrome (ne supprime ni les mots de passe, ni les favoris, ni l'historique)", false);
+            AddJunkCategory(categories,
+                "Cache Navigateur — Microsoft Edge",
+                Path.Combine(localApp, @"Microsoft\Edge\User Data\Default\Cache\Cache_Data"),
+                "Cache web Edge (conserve favoris, sessions et mots de passe)", false);
+            AddJunkCategory(categories,
+                "Cache Navigateur — Brave",
+                Path.Combine(localApp, @"BraveSoftware\Brave-Browser\User Data\Default\Cache\Cache_Data"),
+                "Cache web Brave (conserve favoris, sessions et mots de passe)", false);
+
+            // 8. Cache Windows Delivery Optimization (mises à jour)
+            AddJunkCategory(categories,
+                "Cache Windows Delivery Optimization",
+                Path.Combine(winDir, @"SoftwareDistribution\DeliveryOptimization\Cache"),
+                "Anciens paquets de mise à jour Windows mis en cache (Admin requis)", false);
+
+            // 9. Corbeille Windows
+            AddRecycleBinCategory(categories);
 
             return categories;
         }
 
-        private static void AddJunkCategory(List<JunkCategory> list, string name, string folderPath, string description)
+        private static void AddRecycleBinCategory(List<JunkCategory> list)
+        {
+            try
+            {
+                var info = new SHQUERYRBINFO { cbSize = Marshal.SizeOf(typeof(SHQUERYRBINFO)) };
+                if (SHQueryRecycleBin(null, ref info) == 0 && (info.i64NumItems > 0 || info.i64Size > 0))
+                {
+                    list.Add(new JunkCategory
+                    {
+                        IsSelected = false,
+                        IsRecycleBin = true,
+                        Name = "Corbeille Windows",
+                        FolderPath = "Corbeille Système ($Recycle.Bin)",
+                        Description = "Vider définitivement tous les fichiers présents dans la Corbeille Windows",
+                        FileCount = (int)Math.Min(int.MaxValue, info.i64NumItems),
+                        TotalBytes = info.i64Size,
+                        SizeFormatted = FormatUtils.FormatBytes(info.i64Size)
+                    });
+                }
+            }
+            catch { }
+        }
+
+        private static void AddJunkCategory(List<JunkCategory> list, string name, string folderPath, string description, bool defaultSelected)
         {
             if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath)) return;
 
             int count = 0;
             long bytes = 0;
             CalculateDirectoryStats(folderPath, ref count, ref bytes, 3);
+            if (count == 0 && bytes == 0 && !defaultSelected) return;
 
             list.Add(new JunkCategory
             {
-                IsSelected = true,
+                IsSelected = defaultSelected,
+                IsRecycleBin = false,
                 Name = name,
                 FolderPath = folderPath,
                 Description = description,
@@ -244,11 +313,26 @@ namespace ClearVestige
             var report = new CleanupReport();
             foreach (var cat in selectedCategories.Where(c => c.IsSelected))
             {
+                if (cat.IsRecycleBin)
+                {
+                    try
+                    {
+                        if (SHEmptyRecycleBin(IntPtr.Zero, null, SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND) == 0)
+                        {
+                            report.DeletedFiles += cat.FileCount;
+                            report.FreedBytes += cat.TotalBytes;
+                        }
+                    }
+                    catch { report.FailedItems++; }
+                    continue;
+                }
+
                 if (string.IsNullOrWhiteSpace(cat.FolderPath) || !Directory.Exists(cat.FolderPath))
                     continue;
 
                 CleanFolderContents(cat.FolderPath, report);
             }
+            HistoryAndBackupManager.RecordCleanup("Nettoyeur Caches & Temp", report);
             return report;
         }
 
@@ -315,5 +399,23 @@ namespace ClearVestige
             }
             catch { }
         }
+
+        private const uint SHERB_NOCONFIRMATION = 0x00000001;
+        private const uint SHERB_NOPROGRESSUI = 0x00000002;
+        private const uint SHERB_NOSOUND = 0x00000004;
+
+        [StructLayout(LayoutKind.Sequential, Pack = 4)]
+        private struct SHQUERYRBINFO
+        {
+            public int cbSize;
+            public long i64Size;
+            public long i64NumItems;
+        }
+
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+        private static extern int SHQueryRecycleBin(string pszRootPath, ref SHQUERYRBINFO pSHQueryRBInfo);
+
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+        private static extern int SHEmptyRecycleBin(IntPtr hwnd, string pszRootPath, uint dwFlags);
     }
 }

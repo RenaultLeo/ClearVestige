@@ -7,8 +7,8 @@ using System.Windows;
 [assembly: AssemblyDescription("Utilitaire autonome de désinstallation complète et de nettoyage en profondeur des résidus Windows")]
 [assembly: AssemblyCompany("ClearVestige")]
 [assembly: AssemblyProduct("ClearVestige")]
-[assembly: AssemblyVersion("1.5.0.0")]
-[assembly: AssemblyFileVersion("1.5.0.0")]
+[assembly: AssemblyVersion("2.0.0.0")]
+[assembly: AssemblyFileVersion("2.0.0.0")]
 
 namespace ClearVestige
 {
@@ -120,6 +120,14 @@ namespace ClearVestige
             Console.WriteLine("Fenêtre de désinstallation multiple construite avec succès (" + batchSample.Count + " application(s) en file : " + batchWin.Title + ").");
             var orphanSample = LeftoverScanner.FindAllOrphanCandidates(apps);
             Console.WriteLine("Scan automatique d'orphelins opérationnel (" + orphanSample.Count + " candidat(s) analysé(s)).");
+            var orphanSvcs = SystemToolsManager.ScanOrphanServices();
+            Console.WriteLine("Scan Services tiers orphelins : " + orphanSvcs.Count + " trouvé(s).");
+            var ctxItems = SystemToolsManager.ScanContextMenuEntries();
+            Console.WriteLine("Scan Menu Clic-Droit Windows : " + ctxItems.Count + " entrée(s) tierce(s).");
+            var snapTest = InstallSnapshotManager.TakeSnapshot();
+            Console.WriteLine("Snapshot Avant/Après opérationnel (" + snapTest.TotalEntries + " entrées indexées).");
+            var sampleIcon = apps.Count > 0 ? AppIconHelper.ResolveIconForApp(apps[0]) : null;
+            Console.WriteLine("Extraction icône application : " + (sampleIcon != null ? "oui" : "non"));
             Console.WriteLine("Icône de l'application chargée : " + (UiTheme.AppIcon != null ? "oui" : "non"));
 
             Console.WriteLine("=== Auto-Test réussi avec succès ! ===");

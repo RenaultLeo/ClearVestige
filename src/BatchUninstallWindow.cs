@@ -76,10 +76,7 @@ namespace ClearVestige
             UiTheme.ApplyAppIcon(this);
 
             Title = string.Format("Désinstallation multiple — {0} application(s)", _queue.Count);
-            Width = 1100;
-            Height = 920;
-            MinWidth = 900;
-            MinHeight = 760;
+            UiTheme.ClampWindowToWorkArea(this, 1080, 760, 780, 540);
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             Background = BrushFromHex("#0F172A");
             Foreground = Brushes.White;
@@ -93,22 +90,22 @@ namespace ClearVestige
             Grid.SetRow(titleBar, 0);
             outerGrid.Children.Add(titleBar);
 
-            var root = new Grid { Margin = new Thickness(20, 14, 20, 18) };
+            var root = new Grid { Margin = new Thickness(16, 12, 16, 14) };
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // 0 En-tête
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // 1 Options
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // 2 Barre d'action
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star), MinHeight = 170 }); // 3 File d'attente
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.3, GridUnitType.Star), MinHeight = 170 }); // 4 Résidus
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(90) });                    // 5 Journal
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(0.9, GridUnitType.Star), MinHeight = 100 }); // 3 File d'attente
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1.4, GridUnitType.Star), MinHeight = 120 }); // 4 Résidus
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(74) });                    // 5 Journal
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                       // 6 Pied de page
 
             // ---------- 0. En-tête ----------
-            var header = CreateCard(new Thickness(0, 0, 0, 12));
+            var header = CreateCard(new Thickness(0, 0, 0, 10));
             var headerStack = new StackPanel();
             headerStack.Children.Add(new TextBlock
             {
                 Text = string.Format("Désinstallation multiple — {0} application(s) sélectionnée(s)", _queue.Count),
-                FontSize = 20,
+                FontSize = 17,
                 FontWeight = FontWeights.Bold,
                 Foreground = Brushes.White
             });
@@ -225,12 +222,12 @@ namespace ClearVestige
 
             _gridQueue = CreateDataGrid();
             _gridQueue.ItemsSource = _queue;
-            _gridQueue.Columns.Add(new DataGridTextColumn { Header = "Application", Binding = new Binding("DisplayName"), IsReadOnly = true, Width = new DataGridLength(1.6, DataGridLengthUnitType.Star) });
-            _gridQueue.Columns.Add(new DataGridTextColumn { Header = "Éditeur", Binding = new Binding("Publisher"), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+            _gridQueue.Columns.Add(new DataGridTextColumn { Header = "Application", Binding = new Binding("DisplayName"), IsReadOnly = true, Width = new DataGridLength(1.6, DataGridLengthUnitType.Star), ElementStyle = UiTheme.CreateCellTextTooltipStyle("DisplayName") });
+            _gridQueue.Columns.Add(new DataGridTextColumn { Header = "Éditeur", Binding = new Binding("Publisher"), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star), ElementStyle = UiTheme.CreateCellTextTooltipStyle("Publisher") });
             _gridQueue.Columns.Add(new DataGridTextColumn { Header = "Taille", Binding = new Binding("SizeFormatted"), IsReadOnly = true, Width = new DataGridLength(85) });
-            _gridQueue.Columns.Add(new DataGridTextColumn { Header = "Mode", Binding = new Binding("ModeLabel"), IsReadOnly = true, Width = new DataGridLength(130) });
-            _gridQueue.Columns.Add(new DataGridTextColumn { Header = "État", Binding = new Binding("Status"), IsReadOnly = true, Width = new DataGridLength(1.4, DataGridLengthUnitType.Star) });
-            _gridQueue.Columns.Add(new DataGridTextColumn { Header = "Résidus", Binding = new Binding("LeftoversLabel"), IsReadOnly = true, Width = new DataGridLength(90) });
+            _gridQueue.Columns.Add(new DataGridTextColumn { Header = "Mode", Binding = new Binding("ModeLabel"), IsReadOnly = true, Width = new DataGridLength(125) });
+            _gridQueue.Columns.Add(new DataGridTextColumn { Header = "État", Binding = new Binding("Status"), IsReadOnly = true, Width = new DataGridLength(1.4, DataGridLengthUnitType.Star), ElementStyle = UiTheme.CreateCellTextTooltipStyle("Status") });
+            _gridQueue.Columns.Add(new DataGridTextColumn { Header = "Résidus", Binding = new Binding("LeftoversLabel"), IsReadOnly = true, Width = new DataGridLength(75) });
             Grid.SetRow(_gridQueue, 1);
             queueContainer.Children.Add(_gridQueue);
             Grid.SetRow(queueContainer, 3);
@@ -269,14 +266,14 @@ namespace ClearVestige
             {
                 Header = "Choix",
                 Binding = new Binding("IsSelected") { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
-                Width = new DataGridLength(55)
+                Width = new DataGridLength(52)
             });
-            _gridLeftovers.Columns.Add(new DataGridTextColumn { Header = "Application", Binding = new Binding("OwnerAppName"), IsReadOnly = true, Width = new DataGridLength(150) });
-            _gridLeftovers.Columns.Add(new DataGridTextColumn { Header = "Type", Binding = new Binding("TypeLabel"), IsReadOnly = true, Width = new DataGridLength(100) });
-            _gridLeftovers.Columns.Add(new DataGridTextColumn { Header = "Catégorie", Binding = new Binding("Category"), IsReadOnly = true, Width = new DataGridLength(160) });
-            _gridLeftovers.Columns.Add(new DataGridTextColumn { Header = "Chemin / Clé de Registre", Binding = new Binding("Path"), IsReadOnly = true, Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
-            _gridLeftovers.Columns.Add(new DataGridTextColumn { Header = "Taille", Binding = new Binding("SizeFormatted"), IsReadOnly = true, Width = new DataGridLength(80) });
-            _gridLeftovers.Columns.Add(new DataGridTextColumn { Header = "Fiabilité", Binding = new Binding("Confidence"), IsReadOnly = true, Width = new DataGridLength(120) });
+            _gridLeftovers.Columns.Add(new DataGridTextColumn { Header = "Application", Binding = new Binding("OwnerAppName"), IsReadOnly = true, Width = new DataGridLength(130), ElementStyle = UiTheme.CreateCellTextTooltipStyle("OwnerAppName") });
+            _gridLeftovers.Columns.Add(new DataGridTextColumn { Header = "Type", Binding = new Binding("TypeLabel"), IsReadOnly = true, Width = new DataGridLength(95) });
+            _gridLeftovers.Columns.Add(new DataGridTextColumn { Header = "Catégorie", Binding = new Binding("Category"), IsReadOnly = true, Width = new DataGridLength(145), ElementStyle = UiTheme.CreateCellTextTooltipStyle("Category") });
+            _gridLeftovers.Columns.Add(new DataGridTextColumn { Header = "Chemin / Clé de Registre", Binding = new Binding("DisplayPath"), IsReadOnly = true, Width = new DataGridLength(2.2, DataGridLengthUnitType.Star), MinWidth = 260, ElementStyle = UiTheme.CreateCellTextTooltipStyle("FullTooltip") });
+            _gridLeftovers.Columns.Add(new DataGridTextColumn { Header = "Taille", Binding = new Binding("SizeFormatted"), IsReadOnly = true, Width = new DataGridLength(78) });
+            _gridLeftovers.Columns.Add(new DataGridTextColumn { Header = "Fiabilité", Binding = new Binding("Confidence"), IsReadOnly = true, Width = new DataGridLength(108) });
             Grid.SetRow(_gridLeftovers, 1);
             leftoversContainer.Children.Add(_gridLeftovers);
             Grid.SetRow(leftoversContainer, 4);

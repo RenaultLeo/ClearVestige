@@ -62,10 +62,7 @@ namespace ClearVestige
 
             Title = "Désinstallation Complète — " + _app.DisplayName;
             UiTheme.ApplyAppIcon(this);
-            Width = 980;
-            Height = 720;
-            MinWidth = 820;
-            MinHeight = 600;
+            UiTheme.ClampWindowToWorkArea(this, 1020, 720, 780, 540);
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             Background = BrushFromHex("#0F172A");
             Foreground = Brushes.White;
@@ -676,15 +673,18 @@ namespace ClearVestige
                 Header = "Catégorie",
                 Binding = new Binding("Category"),
                 IsReadOnly = true,
-                Width = new DataGridLength(175)
+                Width = new DataGridLength(165),
+                ElementStyle = UiTheme.CreateCellTextTooltipStyle("Category")
             });
 
             grid.Columns.Add(new DataGridTextColumn
             {
                 Header = "Chemin / Clé de Registre",
-                Binding = new Binding("Path"),
+                Binding = new Binding("DisplayPath"),
                 IsReadOnly = true,
-                Width = new DataGridLength(1, DataGridLengthUnitType.Star)
+                Width = new DataGridLength(2.2, DataGridLengthUnitType.Star),
+                MinWidth = 260,
+                ElementStyle = UiTheme.CreateCellTextTooltipStyle("FullTooltip")
             });
 
             grid.Columns.Add(new DataGridTextColumn

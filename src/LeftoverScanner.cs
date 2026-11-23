@@ -379,7 +379,72 @@ namespace ClearVestige
                     installDir, items, seenPaths);
             }
 
+            // 5. Tâches Planifiées Windows (Scheduled Tasks hors \Microsoft\Windows\)
+            ScanScheduledTasks(installDir, nameTokens, items, seenPaths);
+
             return FilterSharedDirectories(items, app, allInstalledApps);
+        }
+
+        private static void ScanScheduledTasks(
+            string installDir,
+            List<string> nameTokens,
+            List<LeftoverItem> items,
+            HashSet<string> seenPaths)
+        {
+            string tasksRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), @"System32\Tasks");
+            if (!Directory.Exists(tasksRoot)) return;
+
+            bool hasInstallDir = !string.IsNullOrWhiteSpace(installDir) && !AppScanner.IsProtectedSystemDirectory(installDir);
+
+            try
+            {
+                foreach (var taskFile in Directory.GetFiles(tasksRoot, "*", SearchOption.AllDirectories))
+                {
+                    try
+                    {
+                        string relPath = taskFile.Substring(tasksRoot.Length);
+                        // Protéger strictement toutes les tâches système Microsoft Windows
+                        if (relPath.StartsWith(@"\Microsoft\Windows\", StringComparison.OrdinalIgnoreCase) ||
+                            relPath.StartsWith(@"\Microsoft\Office\", StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        string taskName = Path.GetFileName(taskFile);
+                        bool matched = MatchesAnyToken(taskName, nameTokens);
+                        string reason = "Tâche planifiée portant le nom de l'application";
+
+                        if (!matched && hasInstallDir)
+                        {
+                            string xml = File.ReadAllText(taskFile);
+                            if (xml.IndexOf(installDir, StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                matched = true;
+                                reason = "Tâche planifiée exécutant un fichier du dossier de l'application";
+                            }
+                        }
+
+                        if (matched && seenPaths.Add("TASK|" + relPath))
+                        {
+                            items.Add(new LeftoverItem
+                            {
+                                IsSelected = true,
+                                Type = LeftoverType.ScheduledTask,
+                                TypeLabel = "Tâche Planifiée",
+                                Category = "Planificateur de tâches Windows",
+                                Path = relPath,
+                                Description = reason,
+                                SizeBytes = 0,
+                                SizeFormatted = "—",
+                                Confidence = "Élevée (Sûr)",
+                                IsHighConfidence = true
+                            });
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
         }
 
         private static List<LeftoverItem> FilterSharedDirectories(

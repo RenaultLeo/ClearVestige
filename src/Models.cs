@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Windows.Media;
 
 namespace ClearVestige
 {
@@ -17,18 +18,48 @@ namespace ClearVestige
         File,
         Shortcut,
         RegistryKey,
-        RegistryValue
+        RegistryValue,
+        ScheduledTask
     }
 
     public enum ScanDepth
     {
         Safe,       // Uniquement dossier d'installation et clé Uninstall
         Moderate,   // + AppData, ProgramData, Raccourcis, Clés HKCU/HKLM Software dédiées
-        Advanced    // + MuiCache, AppCompatFlags, Run/Startup, Temp, traces étendues
+        Advanced    // + MuiCache, AppCompatFlags, Run/Startup, Temp, Tâches planifiées, traces étendues
     }
 
     public class InstalledApp : INotifyPropertyChanged
     {
+        private bool _isChecked;
+        private ImageSource _appIconImage;
+
+        public bool IsChecked
+        {
+            get { return _isChecked; }
+            set
+            {
+                if (_isChecked != value)
+                {
+                    _isChecked = value;
+                    OnPropertyChanged("IsChecked");
+                }
+            }
+        }
+
+        public ImageSource AppIconImage
+        {
+            get { return _appIconImage; }
+            set
+            {
+                if (_appIconImage != value)
+                {
+                    _appIconImage = value;
+                    OnPropertyChanged("AppIconImage");
+                }
+            }
+        }
+
         public string Id { get; set; }
         public string DisplayName { get; set; }
         public string Publisher { get; set; }
@@ -86,6 +117,24 @@ namespace ClearVestige
         public string Path { get; set; }
         public string ValueName { get; set; }
         public string Description { get; set; }
+        public string DisplayPath
+        {
+            get
+            {
+                if (Type == LeftoverType.RegistryValue && !string.IsNullOrWhiteSpace(ValueName))
+                    return Path + "  \u2192  " + ValueName;
+                return Path;
+            }
+        }
+        public string FullTooltip
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(Description))
+                    return DisplayPath;
+                return DisplayPath + "\n" + Description;
+            }
+        }
         public long SizeBytes { get; set; }
         public string SizeFormatted { get; set; }
         public string Confidence { get; set; } // "Élevée (Sûr)" ou "Moyenne (Vérifier)"
@@ -219,6 +268,7 @@ namespace ClearVestige
         public int FileCount { get; set; }
         public long TotalBytes { get; set; }
         public string SizeFormatted { get; set; }
+        public bool IsRecycleBin { get; set; }
 
         public event PropertyChangedEventHandler PropertyChanged;
         protected void OnPropertyChanged(string name)
@@ -226,6 +276,83 @@ namespace ClearVestige
             var handler = PropertyChanged;
             if (handler != null) handler(this, new PropertyChangedEventArgs(name));
         }
+    }
+
+    public class OrphanServiceItem : INotifyPropertyChanged
+    {
+        private bool _isSelected;
+        public bool IsSelected
+        {
+            get { return _isSelected; }
+            set { if (_isSelected != value) { _isSelected = value; OnPropertyChanged("IsSelected"); } }
+        }
+        public string ServiceName { get; set; }
+        public string DisplayName { get; set; }
+        public string ImagePath { get; set; }
+        public string ResolvedExe { get; set; }
+        public string Status { get; set; }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected void OnPropertyChanged(string name)
+        {
+            var handler = PropertyChanged;
+            if (handler != null) handler(this, new PropertyChangedEventArgs(name));
+        }
+    }
+
+    public class ContextMenuItemEntry : INotifyPropertyChanged
+    {
+        private bool _isSelected;
+        public bool IsSelected
+        {
+            get { return _isSelected; }
+            set { if (_isSelected != value) { _isSelected = value; OnPropertyChanged("IsSelected"); } }
+        }
+        public string Name { get; set; }
+        public string ScopeLabel { get; set; }
+        public string RegistryKeyPath { get; set; }
+        public string Command { get; set; }
+        public bool ExistsOnDisk { get; set; }
+        public string StatusLabel
+        {
+            get { return ExistsOnDisk ? "Actif" : "Orphelin (Exécutable introuvable)"; }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        protected void OnPropertyChanged(string name)
+        {
+            var handler = PropertyChanged;
+            if (handler != null) handler(this, new PropertyChangedEventArgs(name));
+        }
+    }
+
+    public class HistoryEntry
+    {
+        public string Timestamp { get; set; }
+        public string AppName { get; set; }
+        public int DeletedDirs { get; set; }
+        public int DeletedFiles { get; set; }
+        public int DeletedRegistry { get; set; }
+        public long FreedBytes { get; set; }
+        public string FreedFormatted { get { return FormatUtils.FormatBytes(FreedBytes); } }
+        public string BackupFolder { get; set; }
+        public string DetailsSummary
+        {
+            get
+            {
+                return string.Format("{0} doss., {1} fich., {2} reg.", DeletedDirs, DeletedFiles, DeletedRegistry);
+            }
+        }
+    }
+
+    public class BackupFileInfo
+    {
+        public string SessionName { get; set; }
+        public string FileName { get; set; }
+        public string FullPath { get; set; }
+        public string DateFormatted { get; set; }
+        public long SizeBytes { get; set; }
+        public string SizeFormatted { get { return FormatUtils.FormatBytes(SizeBytes); } }
     }
 
     public static class FormatUtils

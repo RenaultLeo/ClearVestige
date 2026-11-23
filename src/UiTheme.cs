@@ -69,6 +69,58 @@ namespace ClearVestige
         }
 
         /// <summary>
+        /// Adapte automatiquement les dimensions d'une fenêtre à la zone utile réelle de l'écran
+        /// (prend en compte la barre des tâches et le zoom DPI 125%/150%/175% des écrans portables).
+        /// </summary>
+        public static void ClampWindowToWorkArea(
+            Window window,
+            double preferredWidth,
+            double preferredHeight,
+            double minWidth,
+            double minHeight)
+        {
+            if (window == null) return;
+            Rect workArea = SystemParameters.WorkArea;
+            double maxW = Math.Max(640, workArea.Width - 28);
+            double maxH = Math.Max(480, workArea.Height - 28);
+
+            window.MinWidth = Math.Min(minWidth, Math.Max(640, workArea.Width * 0.78));
+            window.MinHeight = Math.Min(minHeight, Math.Max(460, workArea.Height * 0.72));
+            window.Width = Math.Min(preferredWidth, maxW);
+            window.Height = Math.Min(preferredHeight, maxH);
+
+            // Garantir après affichage que la fenêtre reste intégralement visible dans la zone utile
+            window.Loaded += (s, e) =>
+            {
+                if (window.WindowState != WindowState.Normal) return;
+                Rect wa = SystemParameters.WorkArea;
+                if (window.Width > wa.Width - 16) window.Width = wa.Width - 16;
+                if (window.Height > wa.Height - 16) window.Height = wa.Height - 16;
+                if (window.Left < wa.Left) window.Left = wa.Left + 8;
+                if (window.Top < wa.Top) window.Top = wa.Top + 8;
+                if (window.Left + window.Width > wa.Right)
+                    window.Left = Math.Max(wa.Left, wa.Left + (wa.Width - window.Width) / 2.0);
+                if (window.Top + window.Height > wa.Bottom)
+                    window.Top = Math.Max(wa.Top, wa.Top + (wa.Height - window.Height) / 2.0);
+            };
+        }
+
+        /// <summary>
+        /// Crée un style d'élément texte DataGrid avec info-bulle complète au survol (utile pour les chemins longs).
+        /// </summary>
+        public static Style CreateCellTextTooltipStyle(string tooltipBindingPath)
+        {
+            var style = new Style(typeof(TextBlock));
+            style.Setters.Add(new Setter(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis));
+            style.Setters.Add(new Setter(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center));
+            if (!string.IsNullOrWhiteSpace(tooltipBindingPath))
+            {
+                style.Setters.Add(new Setter(FrameworkElement.ToolTipProperty, new Binding(tooltipBindingPath)));
+            }
+            return style;
+        }
+
+        /// <summary>
         /// Configure une barre de titre sombre personnalisée (style SysPulse) via WPF WindowChrome
         /// tout en conservant le redimensionnement, Aero Snap et le comportement Maximisé natif Windows.
         /// </summary>
@@ -434,40 +486,78 @@ namespace ClearVestige
     </Style>
 
     <!-- =================================================================== -->
-    <!-- STYLE DATAGRID, EN-TÊTES, LIGNES ET CELLULES                        -->
+    <!-- STYLE DATAGRID, EN-TÊTES REDIMENSIONNABLES, LIGNES ET CELLULES      -->
     <!-- =================================================================== -->
+    <Style TargetType='{x:Type DataGrid}'>
+        <Setter Property='CanUserResizeColumns' Value='True'/>
+        <Setter Property='CanUserReorderColumns' Value='True'/>
+        <Setter Property='HorizontalScrollBarVisibility' Value='Auto'/>
+        <Setter Property='VerticalScrollBarVisibility' Value='Auto'/>
+    </Style>
+
+    <Style x:Key='ColumnHeaderGripperStyle' TargetType='{x:Type Thumb}'>
+        <Setter Property='Width' Value='8'/>
+        <Setter Property='Background' Value='Transparent'/>
+        <Setter Property='Cursor' Value='SizeWE'/>
+        <Setter Property='Template'>
+            <Setter.Value>
+                <ControlTemplate TargetType='{x:Type Thumb}'>
+                    <Border Background='{TemplateBinding Background}' Padding='{TemplateBinding Padding}'>
+                        <Border x:Name='gripLine' Width='2' HorizontalAlignment='Center' Background='Transparent'/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property='IsMouseOver' Value='True'>
+                            <Setter TargetName='gripLine' Property='Background' Value='#38BDF8'/>
+                        </Trigger>
+                        <Trigger Property='IsDragging' Value='True'>
+                            <Setter TargetName='gripLine' Property='Background' Value='#60A5FA'/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style TargetType='{x:Type DataGridColumnHeader}'>
         <Setter Property='Background' Value='#0B1120'/>
         <Setter Property='Foreground' Value='#94A3B8'/>
         <Setter Property='FontWeight' Value='SemiBold'/>
         <Setter Property='FontSize' Value='12'/>
-        <Setter Property='Padding' Value='12,9'/>
+        <Setter Property='Padding' Value='10,9'/>
         <Setter Property='BorderBrush' Value='#26354D'/>
         <Setter Property='BorderThickness' Value='0,0,1,1'/>
         <Setter Property='Cursor' Value='Hand'/>
         <Setter Property='Template'>
             <Setter.Value>
                 <ControlTemplate TargetType='{x:Type DataGridColumnHeader}'>
-                    <Border x:Name='hdrBorder'
-                            Background='{TemplateBinding Background}'
-                            BorderBrush='{TemplateBinding BorderBrush}'
-                            BorderThickness='{TemplateBinding BorderThickness}'
-                            Padding='{TemplateBinding Padding}'
-                            SnapsToDevicePixels='True'>
-                        <DockPanel>
-                            <TextBlock x:Name='sortArrow'
-                                       DockPanel.Dock='Right'
-                                       Text=''
-                                       Foreground='#38BDF8'
-                                       FontWeight='Bold'
-                                       Margin='6,0,0,0'
-                                       VerticalAlignment='Center'
-                                       Visibility='Collapsed'/>
-                            <ContentPresenter VerticalAlignment='Center'
-                                              SnapsToDevicePixels='{TemplateBinding SnapsToDevicePixels}'
-                                              TextElement.Foreground='{TemplateBinding Foreground}'/>
-                        </DockPanel>
-                    </Border>
+                    <Grid>
+                        <Border x:Name='hdrBorder'
+                                Background='{TemplateBinding Background}'
+                                BorderBrush='{TemplateBinding BorderBrush}'
+                                BorderThickness='{TemplateBinding BorderThickness}'
+                                Padding='{TemplateBinding Padding}'
+                                SnapsToDevicePixels='True'>
+                            <DockPanel>
+                                <TextBlock x:Name='sortArrow'
+                                           DockPanel.Dock='Right'
+                                           Text=''
+                                           Foreground='#38BDF8'
+                                           FontWeight='Bold'
+                                           Margin='6,0,0,0'
+                                           VerticalAlignment='Center'
+                                           Visibility='Collapsed'/>
+                                <ContentPresenter VerticalAlignment='Center'
+                                                  SnapsToDevicePixels='{TemplateBinding SnapsToDevicePixels}'
+                                                  TextElement.Foreground='{TemplateBinding Foreground}'/>
+                            </DockPanel>
+                        </Border>
+                        <Thumb x:Name='PART_LeftHeaderGripper'
+                               HorizontalAlignment='Left'
+                               Style='{StaticResource ColumnHeaderGripperStyle}'/>
+                        <Thumb x:Name='PART_RightHeaderGripper'
+                               HorizontalAlignment='Right'
+                               Style='{StaticResource ColumnHeaderGripperStyle}'/>
+                    </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property='IsMouseOver' Value='True'>
                             <Setter TargetName='hdrBorder' Property='Background' Value='#1E293B'/>

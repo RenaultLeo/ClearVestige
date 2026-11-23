@@ -16,7 +16,7 @@ using System.Windows.Shell;
 
 namespace ClearVestige
 {
-    public class MainWindow : Window
+    public partial class MainWindow : Window
     {
         private List<InstalledApp> _allApps = new List<InstalledApp>();
         private readonly ObservableCollection<InstalledApp> _filteredApps = new ObservableCollection<InstalledApp>();
@@ -25,6 +25,7 @@ namespace ClearVestige
         private readonly ObservableCollection<JunkCategory> _junkCategories = new ObservableCollection<JunkCategory>();
 
         private string _activeFilterTag = "ALL";
+        private TabControl _mainTabControl;
 
         // Contrôles Tableau de bord
         private TextBlock _lblHeaderSubtitle;
@@ -44,6 +45,8 @@ namespace ClearVestige
         private Button _btnUninstallSilent;
         private Button _btnScanLeftoversOnly;
         private Button _btnOpenFolder;
+        private Button _btnCheckedFilter;
+        private Button _btnClearChecked;
         private readonly List<Button> _filterButtons = new List<Button>();
 
         // Contrôles Onglet 2 : Recherche d'Application Orpheline / Désinstallation Forcée
@@ -75,16 +78,19 @@ namespace ClearVestige
         {
             UiTheme.ApplyDarkTheme(this);
 
-            Title = "ClearVestige v1.5 — Désinstallateur Complet & Nettoyeur de Résidus";
+            Title = Loc.T("ClearVestige v2.0 — Désinstallateur Complet & Nettoyeur de Résidus",
+                          "ClearVestige v2.0 — Deep Uninstaller & Leftover Cleaner");
             UiTheme.ApplyAppIcon(this);
-            Width = 1280;
-            Height = 820;
-            MinWidth = 1040;
-            MinHeight = 660;
+            UiTheme.ClampWindowToWorkArea(this, 1280, 810, 940, 580);
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Background = BrushFromHex("#0F172A");
             Foreground = Brushes.White;
             FontFamily = new FontFamily("Segoe UI");
+
+            // Support du Glisser-Déposer (.lnk, .exe ou dossier directement sur la fenêtre)
+            AllowDrop = true;
+            PreviewDragOver += OnWindowDragOver;
+            Drop += OnWindowDrop;
 
             // Grille externe : Ligne 0 = Barre de titre sombre intégrée (style SysPulse), Ligne 1 = Contenu principal
             var outerGrid = new Grid();
@@ -161,36 +167,72 @@ namespace ClearVestige
                 rightHeaderStack.Children.Add(btnElevate);
             }
 
+            var btnLang = new Button
+            {
+                Content = Loc.IsEnglish ? "🌐 EN" : "🌐 FR",
+                Background = BrushFromHex("#131D31"),
+                Foreground = BrushFromHex("#CBD5E1"),
+                BorderBrush = BrushFromHex("#334155"),
+                BorderThickness = new Thickness(1),
+                FontWeight = FontWeights.Bold,
+                FontSize = 11.5,
+                Padding = new Thickness(10, 6, 10, 6),
+                Margin = new Thickness(0, 0, 8, 0),
+                Cursor = Cursors.Hand,
+                ToolTip = Loc.T("Passer l'interface en Anglais (EN)", "Switch UI language to French (FR)")
+            };
+            WindowChrome.SetIsHitTestVisibleInChrome(btnLang, true);
+            btnLang.Click += OnToggleLanguageClick;
+            rightHeaderStack.Children.Add(btnLang);
+
             var btnHeaderRefresh = new Button
             {
-                Content = "🔄 Actualiser",
+                Content = Loc.T("🔄 Actualiser", "🔄 Refresh"),
                 Background = BrushFromHex("#131D31"),
                 Foreground = BrushFromHex("#E2E8F0"),
                 BorderBrush = BrushFromHex("#334155"),
                 BorderThickness = new Thickness(1),
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 12,
-                Padding = new Thickness(12, 7, 12, 7),
+                Padding = new Thickness(11, 7, 11, 7),
                 Margin = new Thickness(0, 0, 8, 0),
                 Cursor = Cursors.Hand,
-                ToolTip = "Actualiser l'inventaire des applications, le démarrage et les fichiers temporaires"
+                ToolTip = Loc.T("Actualiser l'inventaire des applications, le démarrage et les caches", "Refresh apps inventory, startup and caches")
             };
             WindowChrome.SetIsHitTestVisibleInChrome(btnHeaderRefresh, true);
             btnHeaderRefresh.Click += async (s, e) => await RefreshAllDataAsync();
             rightHeaderStack.Children.Add(btnHeaderRefresh);
 
-            var btnOpenBackups = new Button
+            var btnHtmlReport = new Button
             {
-                Content = "📂 Sauvegardes .reg",
+                Content = Loc.T("📄 Rapport HTML", "📄 HTML Report"),
                 Background = BrushFromHex("#0E7490"),
                 Foreground = Brushes.White,
                 BorderBrush = BrushFromHex("#22D3EE"),
                 BorderThickness = new Thickness(1),
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 12,
-                Padding = new Thickness(13, 7, 13, 7),
+                Padding = new Thickness(12, 7, 12, 7),
+                Margin = new Thickness(0, 0, 8, 0),
                 Cursor = Cursors.Hand,
-                ToolTip = "Ouvrir le dossier local des sauvegardes automatiques du Registre (.reg)"
+                ToolTip = Loc.T("Exporter un rapport HTML sombre complet (inventaire + historique des nettoyages)", "Export standalone dark HTML report (inventory + cleanup history)")
+            };
+            WindowChrome.SetIsHitTestVisibleInChrome(btnHtmlReport, true);
+            btnHtmlReport.Click += OnExportHtmlReportClick;
+            rightHeaderStack.Children.Add(btnHtmlReport);
+
+            var btnOpenBackups = new Button
+            {
+                Content = "📂 .reg",
+                Background = BrushFromHex("#131D31"),
+                Foreground = BrushFromHex("#E2E8F0"),
+                BorderBrush = BrushFromHex("#334155"),
+                BorderThickness = new Thickness(1),
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 12,
+                Padding = new Thickness(10, 7, 10, 7),
+                Cursor = Cursors.Hand,
+                ToolTip = Loc.T("Ouvrir le dossier local des sauvegardes automatiques du Registre (.reg)", "Open local Registry backups folder (.reg)")
             };
             WindowChrome.SetIsHitTestVisibleInChrome(btnOpenBackups, true);
             btnOpenBackups.Click += (s, e) =>
@@ -281,9 +323,9 @@ namespace ClearVestige
             rootGrid.Children.Add(topStack);
 
             // =========================================================================
-            // 2. ONGLETS PRINCIPAUX
+            // 2. ONGLETS PRINCIPAUX (5 ONGLETS COMPACTS + AUTO-DÉSINSTALLATION)
             // =========================================================================
-            var tabControl = new TabControl
+            _mainTabControl = new TabControl
             {
                 Background = BrushFromHex("#0F172A"),
                 BorderBrush = BrushFromHex("#334155"),
@@ -291,29 +333,31 @@ namespace ClearVestige
                 Padding = new Thickness(0)
             };
 
-            tabControl.Items.Add(CreateTabItem("📦  Applications Installées", BuildInstalledAppsTab()));
-            tabControl.Items.Add(CreateTabItem("🔍  Recherche d'Applications Orphelines", BuildForcedUninstallTab()));
-            tabControl.Items.Add(CreateTabItem("🚀  Gestionnaire de Démarrage", BuildStartupManagerTab()));
-            tabControl.Items.Add(CreateTabItem("🧹  Nettoyeur de Fichiers Inutiles", BuildJunkCleanerTab()));
+            _mainTabControl.Items.Add(CreateTabItem(Loc.T("📦 Applications", "📦 Apps"), BuildInstalledAppsTab()));
+            _mainTabControl.Items.Add(CreateTabItem(Loc.T("🔍 Orphelins", "🔍 Orphans"), BuildForcedUninstallTab()));
+            _mainTabControl.Items.Add(CreateTabItem(Loc.T("🚀 Système", "🚀 System"), BuildSystemAndStartupTab()));
+            _mainTabControl.Items.Add(CreateTabItem(Loc.T("🧹 Nettoyeur", "🧹 Cleaner"), BuildJunkCleanerTab()));
+            _mainTabControl.Items.Add(CreateTabItem(Loc.T("📸 Snapshot & Historique", "📸 Snapshot & History"), BuildSnapshotAndHistoryTab()));
 
-            Grid.SetRow(tabControl, 1);
-            rootGrid.Children.Add(tabControl);
+            Grid.SetRow(_mainTabControl, 1);
+            rootGrid.Children.Add(_mainTabControl);
 
             // Bouton d'auto-désinstallation complète placé directement sur la ligne des onglets principaux (à droite)
             var btnSelfUninstall = new Button
             {
-                Content = "🗑️  Désinstaller l'application",
+                Content = Loc.T("🗑️ Désinstaller", "🗑️ Uninstall App"),
                 Background = BrushFromHex("#7F1D1D"),
                 Foreground = BrushFromHex("#FECACA"),
                 BorderBrush = BrushFromHex("#DC2626"),
                 BorderThickness = new Thickness(1),
                 FontWeight = FontWeights.SemiBold,
-                FontSize = 13,
-                Padding = new Thickness(16, 9, 16, 9),
+                FontSize = 12.5,
+                Padding = new Thickness(14, 9, 14, 9),
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Top,
                 Cursor = Cursors.Hand,
-                ToolTip = "Désinstaller complètement ClearVestige et supprimer toutes ses traces du PC"
+                ToolTip = Loc.T("Désinstaller complètement ClearVestige et supprimer toutes ses traces du PC",
+                                "Completely uninstall ClearVestige and remove all its traces from this PC")
             };
             Panel.SetZIndex(btnSelfUninstall, 10);
             btnSelfUninstall.Click += (s, e) => ShowSelfUninstallDialog();
@@ -421,11 +465,17 @@ namespace ClearVestige
             searchDock.Children.Add(_cbIncludeSystem);
 
             var rightButtons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-            var btnExportCsv = CreateActionButton("📄 Exporter CSV", "#334155", "#E2E8F0");
+            var btnExportWinget = CreateActionButton(Loc.T("📦 Export Winget", "📦 Winget Script"), "#334155", "#E2E8F0");
+            btnExportWinget.Margin = new Thickness(0, 0, 8, 0);
+            btnExportWinget.ToolTip = Loc.T("Exporter un script PowerShell Winget pour réinstaller vos applications en 1 clic",
+                                            "Export a Winget PowerShell script to reinstall your apps in 1 click");
+            btnExportWinget.Click += OnExportWingetClick;
+            var btnExportCsv = CreateActionButton(Loc.T("📄 CSV", "📄 CSV"), "#334155", "#E2E8F0");
             btnExportCsv.Margin = new Thickness(0, 0, 8, 0);
             btnExportCsv.Click += OnExportCsvClick;
-            var btnRefresh = CreateActionButton("🔄 Actualiser", "#334155", "#E2E8F0");
+            var btnRefresh = CreateActionButton(Loc.T("🔄 Actualiser", "🔄 Refresh"), "#334155", "#E2E8F0");
             btnRefresh.Click += async (s, e) => await RefreshAllDataAsync();
+            rightButtons.Children.Add(btnExportWinget);
             rightButtons.Children.Add(btnExportCsv);
             rightButtons.Children.Add(btnRefresh);
             DockPanel.SetDock(rightButtons, Dock.Right);
@@ -434,29 +484,80 @@ namespace ClearVestige
             Grid.SetRow(searchDock, 0);
             grid.Children.Add(searchDock);
 
-            // Ligne 2 : Filtres par catégorie
+            // Ligne 2 : Filtres par catégorie + Filtre "Cochées (N)" persistant à travers les recherches
             var filterPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
-            AddCategoryFilterButton(filterPanel, "Toutes les applications", "ALL", true);
-            AddCategoryFilterButton(filterPanel, "64-bit (Système)", "SYS64", false);
-            AddCategoryFilterButton(filterPanel, "32-bit (WOW64)", "SYS32", false);
-            AddCategoryFilterButton(filterPanel, "Utilisateur (HKCU)", "USER", false);
-            AddCategoryFilterButton(filterPanel, "Volumineuses (> 100 Mo)", "LARGE", false);
-            AddCategoryFilterButton(filterPanel, "Installées récemment (30j)", "RECENT", false);
+            AddCategoryFilterButton(filterPanel, Loc.T("Toutes", "All"), "ALL", true);
+            AddCategoryFilterButton(filterPanel, Loc.T("64-bit", "64-bit"), "SYS64", false);
+            AddCategoryFilterButton(filterPanel, Loc.T("32-bit", "32-bit"), "SYS32", false);
+            AddCategoryFilterButton(filterPanel, Loc.T("Utilisateur", "User"), "USER", false);
+            AddCategoryFilterButton(filterPanel, Loc.T("> 100 Mo", "> 100 MB"), "LARGE", false);
+            AddCategoryFilterButton(filterPanel, Loc.T("Récentes (30j)", "Recent (30d)"), "RECENT", false);
+            _btnCheckedFilter = AddCategoryFilterButton(filterPanel, Loc.T("✓ Cochées (0)", "✓ Checked (0)"), "CHECKED", false);
+
+            _btnClearChecked = new Button
+            {
+                Content = Loc.T("Tout décocher", "Uncheck all"),
+                Background = BrushFromHex("#334155"),
+                Foreground = BrushFromHex("#FCA5A5"),
+                BorderThickness = new Thickness(0),
+                Padding = new Thickness(10, 5, 10, 5),
+                Margin = new Thickness(6, 0, 0, 4),
+                FontSize = 11.5,
+                Cursor = Cursors.Hand,
+                Visibility = Visibility.Collapsed
+            };
+            _btnClearChecked.Click += (s, e) =>
+            {
+                foreach (var a in _allApps) a.IsChecked = false;
+                if (_activeFilterTag == "CHECKED")
+                {
+                    _activeFilterTag = "ALL";
+                    foreach (var b in _filterButtons)
+                    {
+                        bool active = (string)b.Tag == "ALL";
+                        b.Background = active ? BrushFromHex("#2563EB") : BrushFromHex("#1E293B");
+                        b.Foreground = active ? Brushes.White : BrushFromHex("#CBD5E1");
+                        b.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
+                    }
+                    ApplyAppFilters();
+                }
+                UpdateCheckedAppsUI();
+            };
+            filterPanel.Children.Add(_btnClearChecked);
+
             Grid.SetRow(filterPanel, 1);
             grid.Children.Add(filterPanel);
 
-            // Ligne 3 : Grille des applications
+            // Ligne 3 : Grille des applications (avec cases à cocher persistantes + vraies icônes d'applications)
             _gridApps = CreateStyledDataGrid();
-            _gridApps.SelectionMode = DataGridSelectionMode.Extended; // Ctrl / Maj + clic = sélection multiple
+            _gridApps.SelectionMode = DataGridSelectionMode.Extended;
             _gridApps.ItemsSource = _filteredApps;
             _gridApps.SelectionChanged += OnSelectedAppChanged;
             _gridApps.MouseDoubleClick += (s, e) => OpenUninstallWizardForSelected(false, false);
 
-            _gridApps.Columns.Add(new DataGridTextColumn
+            _gridApps.Columns.Add(new DataGridCheckBoxColumn
             {
-                Header = "Nom de l'application",
-                Binding = new Binding("DisplayName"),
+                Header = Loc.T("Choix", "Pick"),
+                Binding = new Binding("IsChecked") { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
+                Width = new DataGridLength(52)
+            });
+
+            // Colonne Nom + Icône réelle de l'application (20x20)
+            var nameWithIconTemplate = (DataTemplate)System.Windows.Markup.XamlReader.Parse(@"
+<DataTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'>
+    <StackPanel Orientation='Horizontal' VerticalAlignment='Center'>
+        <Image Source='{Binding AppIconImage}' Width='18' Height='18' Margin='0,0,8,0' RenderOptions.BitmapScalingMode='HighQuality' VerticalAlignment='Center'/>
+        <TextBlock Text='{Binding DisplayName}' TextTrimming='CharacterEllipsis' VerticalAlignment='Center' ToolTip='{Binding DisplayName}'/>
+    </StackPanel>
+</DataTemplate>");
+
+            _gridApps.Columns.Add(new DataGridTemplateColumn
+            {
+                Header = Loc.T("Nom de l'application", "Application"),
+                CellTemplate = nameWithIconTemplate,
+                SortMemberPath = "DisplayName",
                 Width = new DataGridLength(2.2, DataGridLengthUnitType.Star),
+                MinWidth = 200,
                 IsReadOnly = true
             });
             _gridApps.Columns.Add(new DataGridTextColumn
@@ -464,7 +565,8 @@ namespace ClearVestige
                 Header = "Éditeur",
                 Binding = new Binding("Publisher"),
                 Width = new DataGridLength(1.3, DataGridLengthUnitType.Star),
-                IsReadOnly = true
+                IsReadOnly = true,
+                ElementStyle = UiTheme.CreateCellTextTooltipStyle("Publisher")
             });
             _gridApps.Columns.Add(new DataGridTextColumn
             {
@@ -500,8 +602,10 @@ namespace ClearVestige
             {
                 Header = "Dossier d'installation",
                 Binding = new Binding("InstallLocation"),
-                Width = new DataGridLength(1.6, DataGridLengthUnitType.Star),
-                IsReadOnly = true
+                Width = new DataGridLength(1.8, DataGridLengthUnitType.Star),
+                MinWidth = 220,
+                IsReadOnly = true,
+                ElementStyle = UiTheme.CreateCellTextTooltipStyle("InstallLocation")
             });
 
             // Menu contextuel clic-droit
@@ -774,10 +878,10 @@ namespace ClearVestige
                 Width = new DataGridLength(60)
             });
             _gridForcedLeftovers.Columns.Add(new DataGridTextColumn { Header = "Type", Binding = new Binding("TypeLabel"), Width = new DataGridLength(110), IsReadOnly = true });
-            _gridForcedLeftovers.Columns.Add(new DataGridTextColumn { Header = "Catégorie", Binding = new Binding("Category"), Width = new DataGridLength(190), IsReadOnly = true });
-            _gridForcedLeftovers.Columns.Add(new DataGridTextColumn { Header = "Chemin / Clé de Registre", Binding = new Binding("Path"), Width = new DataGridLength(1, DataGridLengthUnitType.Star), IsReadOnly = true });
-            _gridForcedLeftovers.Columns.Add(new DataGridTextColumn { Header = "Taille", Binding = new Binding("SizeFormatted"), Width = new DataGridLength(95), IsReadOnly = true });
-            _gridForcedLeftovers.Columns.Add(new DataGridTextColumn { Header = "Fiabilité", Binding = new Binding("Confidence"), Width = new DataGridLength(130), IsReadOnly = true });
+            _gridForcedLeftovers.Columns.Add(new DataGridTextColumn { Header = "Catégorie", Binding = new Binding("Category"), Width = new DataGridLength(180), IsReadOnly = true, ElementStyle = UiTheme.CreateCellTextTooltipStyle("Category") });
+            _gridForcedLeftovers.Columns.Add(new DataGridTextColumn { Header = "Chemin / Clé de Registre", Binding = new Binding("DisplayPath"), Width = new DataGridLength(2.2, DataGridLengthUnitType.Star), MinWidth = 260, IsReadOnly = true, ElementStyle = UiTheme.CreateCellTextTooltipStyle("FullTooltip") });
+            _gridForcedLeftovers.Columns.Add(new DataGridTextColumn { Header = "Taille", Binding = new Binding("SizeFormatted"), Width = new DataGridLength(90), IsReadOnly = true });
+            _gridForcedLeftovers.Columns.Add(new DataGridTextColumn { Header = "Fiabilité", Binding = new Binding("Confidence"), Width = new DataGridLength(120), IsReadOnly = true });
 
             Grid.SetRow(_gridForcedLeftovers, 2);
             grid.Children.Add(_gridForcedLeftovers);
@@ -879,9 +983,9 @@ namespace ClearVestige
                 Binding = new Binding("IsSelected") { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
                 Width = new DataGridLength(60)
             });
-            _gridAutoOrphans.Columns.Add(new DataGridTextColumn { Header = "Nom / Élément", Binding = new Binding("Name"), Width = new DataGridLength(180), IsReadOnly = true });
-            _gridAutoOrphans.Columns.Add(new DataGridTextColumn { Header = "Emplacement", Binding = new Binding("Category"), Width = new DataGridLength(180), IsReadOnly = true });
-            _gridAutoOrphans.Columns.Add(new DataGridTextColumn { Header = "Chemin Disque ou Registre", Binding = new Binding("Path"), Width = new DataGridLength(1, DataGridLengthUnitType.Star), IsReadOnly = true });
+            _gridAutoOrphans.Columns.Add(new DataGridTextColumn { Header = "Nom / Élément", Binding = new Binding("Name"), Width = new DataGridLength(170), IsReadOnly = true, ElementStyle = UiTheme.CreateCellTextTooltipStyle("Name") });
+            _gridAutoOrphans.Columns.Add(new DataGridTextColumn { Header = "Emplacement", Binding = new Binding("Category"), Width = new DataGridLength(175), IsReadOnly = true, ElementStyle = UiTheme.CreateCellTextTooltipStyle("Category") });
+            _gridAutoOrphans.Columns.Add(new DataGridTextColumn { Header = "Chemin Disque ou Registre", Binding = new Binding("Path"), Width = new DataGridLength(2.2, DataGridLengthUnitType.Star), MinWidth = 260, IsReadOnly = true, ElementStyle = UiTheme.CreateCellTextTooltipStyle("Path") });
             _gridAutoOrphans.Columns.Add(new DataGridTextColumn { Header = "Taille", Binding = new Binding("SizeFormatted"), Width = new DataGridLength(90), IsReadOnly = true });
             _gridAutoOrphans.Columns.Add(new DataGridTextColumn { Header = "Modifié le", Binding = new Binding("LastModifiedFormatted"), Width = new DataGridLength(105), IsReadOnly = true });
 
@@ -1096,16 +1200,58 @@ namespace ClearVestige
             await RefreshAppsOnlyAsync();
             RefreshStartupItems();
             await RefreshJunkCategoriesAsync();
+            RefreshHistoryAndBackups();
         }
 
         private async Task RefreshAppsOnlyAsync()
         {
-            _lblStatusFooter.Text = "Analyse des applications installées dans le Registre Windows (64-bit, 32-bit, Utilisateur)...";
+            _lblStatusFooter.Text = Loc.T(
+                "Analyse des applications installées dans le Registre Windows (64-bit, 32-bit, Utilisateur)...",
+                "Scanning installed applications in Windows Registry (64-bit, 32-bit, Current User)...");
             bool includeSystem = _cbIncludeSystem.IsChecked == true;
             bool includeStore = _cbIncludeStore.IsChecked == true;
 
-            _allApps = await Task.Run(() => AppScanner.ScanInstalledApps(includeSystem, includeStore));
+            // Conserver les cases cochées même après un rafraîchissement
+            var previouslyCheckedIds = new HashSet<string>(
+                _allApps.Where(a => a.IsChecked && !string.IsNullOrWhiteSpace(a.Id)).Select(a => a.Id),
+                StringComparer.OrdinalIgnoreCase);
+
+            var scanned = await Task.Run(() => AppScanner.ScanInstalledApps(includeSystem, includeStore));
+            foreach (var app in scanned)
+            {
+                app.AppIconImage = AppIconHelper.DefaultAppIcon;
+                if (!string.IsNullOrWhiteSpace(app.Id) && previouslyCheckedIds.Contains(app.Id))
+                    app.IsChecked = true;
+
+                app.PropertyChanged += (s, ev) =>
+                {
+                    if (ev.PropertyName == "IsChecked")
+                        UpdateCheckedAppsUI();
+                };
+            }
+
+            _allApps = scanned;
             ApplyAppFilters();
+            UpdateCheckedAppsUI();
+
+            // Charger les vraies icônes Windows en arrière-plan sans jamais bloquer l'interface
+            var appsSnapshot = _allApps.ToList();
+            var unused = Task.Run(() =>
+            {
+                foreach (var app in appsSnapshot)
+                {
+                    var icon = AppIconHelper.ResolveIconForApp(app);
+                    if (icon != null && icon != AppIconHelper.DefaultAppIcon)
+                    {
+                        var targetApp = app;
+                        var resolvedIcon = icon;
+                        Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            targetApp.AppIconImage = resolvedIcon;
+                        }));
+                    }
+                }
+            });
         }
 
         private void ApplyAppFilters()
@@ -1132,6 +1278,9 @@ namespace ClearVestige
                     DateTime cutoff = DateTime.Now.AddDays(-30);
                     enumerable = enumerable.Where(a => a.InstallDateParsed.HasValue && a.InstallDateParsed.Value >= cutoff);
                     break;
+                case "CHECKED":
+                    enumerable = enumerable.Where(a => a.IsChecked);
+                    break;
             }
 
             // Filtre par recherche texte
@@ -1153,10 +1302,13 @@ namespace ClearVestige
             _lblTotalSize.Text = FormatUtils.FormatBytes(totalBytes);
             if (_lblHeaderSubtitle != null)
             {
-                _lblHeaderSubtitle.Text = string.Format("{0}  •  v1.5  •  {1} applications  •  {2}",
+                _lblHeaderSubtitle.Text = string.Format("{0}  •  v2.0  •  {1} applications  •  {2}",
                     Environment.MachineName, _allApps.Count, FormatUtils.FormatBytes(_allApps.Sum(a => a.SizeBytes)));
             }
-            _lblStatusFooter.Text = string.Format("Prêt — {0} application(s) affichée(s) sur {1} détectée(s). Double-cliquez sur une ligne pour lancer la désinstallation complète.", list.Count, _allApps.Count);
+            _lblStatusFooter.Text = string.Format(
+                Loc.T("Prêt — {0} application(s) affichée(s) sur {1}. Cochez plusieurs applis (conservées entre vos recherches) ou glissez-déposez un raccourci/dossier ici.",
+                      "Ready — {0} of {1} app(s) shown. Check multiple apps (kept across searches) or drag & drop a shortcut/folder here."),
+                list.Count, _allApps.Count);
 
             if (_gridApps != null && _gridApps.SelectedItem == null && _filteredApps.Count > 0)
             {
@@ -1164,8 +1316,18 @@ namespace ClearVestige
             }
         }
 
+        private List<InstalledApp> GetCheckedApps()
+        {
+            return _allApps.Where(a => a.IsChecked).ToList();
+        }
+
         private List<InstalledApp> GetSelectedApps()
         {
+            // Priorité aux applications explicitement cochées (persistantes entre recherches !)
+            var checkedApps = GetCheckedApps();
+            if (checkedApps.Count > 0)
+                return checkedApps;
+
             var result = new List<InstalledApp>();
             if (_gridApps == null) return result;
             foreach (var item in _gridApps.SelectedItems)
@@ -1176,28 +1338,52 @@ namespace ClearVestige
             return result;
         }
 
+        private void UpdateCheckedAppsUI()
+        {
+            var checkedApps = GetCheckedApps();
+            int checkedCount = checkedApps.Count;
+
+            if (_btnCheckedFilter != null)
+            {
+                _btnCheckedFilter.Content = string.Format(Loc.T("✓ Cochées ({0})", "✓ Checked ({0})"), checkedCount);
+            }
+            if (_btnClearChecked != null)
+            {
+                _btnClearChecked.Visibility = checkedCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            OnSelectedAppChanged(null, null);
+        }
+
         private void OnSelectedAppChanged(object sender, SelectionChangedEventArgs e)
         {
-            var selectedApps = GetSelectedApps();
-            int count = selectedApps.Count;
+            var targetApps = GetSelectedApps();
+            int count = targetApps.Count;
+            bool usingCheckboxes = GetCheckedApps().Count > 0;
 
-            if (count > 1)
+            if (count > 1 || (usingCheckboxes && count >= 1))
             {
                 _btnUninstallComplete.IsEnabled = true;
                 _btnUninstallSilent.IsEnabled = true;
-                _btnScanLeftoversOnly.IsEnabled = false;
-                _btnOpenFolder.IsEnabled = false;
-                _btnUninstallComplete.Content = string.Format("🗑️ Désinstaller la sélection ({0})", count);
-                _btnUninstallSilent.Content = string.Format("⚡ Silencieuse ({0})", count);
+                _btnScanLeftoversOnly.IsEnabled = count == 1;
+                _btnOpenFolder.IsEnabled = count == 1 && !string.IsNullOrWhiteSpace(targetApps[0].InstallLocation) && Directory.Exists(targetApps[0].InstallLocation);
+                _btnUninstallComplete.Content = count > 1
+                    ? string.Format(Loc.T("🗑️ Désinstaller ({0})", "🗑️ Uninstall ({0})"), count)
+                    : Loc.T("🗑️ Désinstallation en Profondeur", "🗑️ Deep Uninstall");
+                _btnUninstallSilent.Content = count > 1
+                    ? string.Format(Loc.T("⚡ Silencieuse ({0})", "⚡ Silent ({0})"), count)
+                    : Loc.T("⚡ Désinstallation Silencieuse", "⚡ Silent Uninstall");
 
-                long total = selectedApps.Sum(a => a.SizeBytes);
-                _txtSelectedAppTitle.Text = string.Format("{0} applications sélectionnées ({1})", count, FormatUtils.FormatBytes(total));
-                _txtSelectedAppDetails.Text = string.Join(", ", selectedApps.Select(a => a.DisplayName).ToArray());
+                long total = targetApps.Sum(a => a.SizeBytes);
+                _txtSelectedAppTitle.Text = string.Format(
+                    Loc.T("{0} application(s) cochée(s) / sélectionnée(s) ({1})", "{0} app(s) checked / selected ({1})"),
+                    count, FormatUtils.FormatBytes(total));
+                _txtSelectedAppDetails.Text = string.Join(", ", targetApps.Select(a => a.DisplayName).ToArray());
                 return;
             }
 
-            _btnUninstallComplete.Content = "🗑️ Désinstallation en Profondeur";
-            _btnUninstallSilent.Content = "⚡ Désinstallation Silencieuse";
+            _btnUninstallComplete.Content = Loc.T("🗑️ Désinstallation en Profondeur", "🗑️ Deep Uninstall");
+            _btnUninstallSilent.Content = Loc.T("⚡ Désinstallation Silencieuse", "⚡ Silent Uninstall");
 
             var app = _gridApps.SelectedItem as InstalledApp;
             bool hasSelection = app != null;
@@ -1209,8 +1395,9 @@ namespace ClearVestige
 
             if (app == null)
             {
-                _txtSelectedAppTitle.Text = "Sélectionnez une application dans la liste";
-                _txtSelectedAppDetails.Text = "Double-cliquez sur une application, ou Ctrl / Maj + clic pour en sélectionner plusieurs à désinstaller d'un coup.";
+                _txtSelectedAppTitle.Text = Loc.T("Sélectionnez ou cochez une application dans la liste", "Select or check an application in the list");
+                _txtSelectedAppDetails.Text = Loc.T("Cochez plusieurs applis (la sélection est conservée quand vous changez de recherche !) ou glissez-déposez un raccourci sur la fenêtre.",
+                                                    "Check multiple apps (checked items stay saved across searches!) or drag & drop a shortcut onto the window.");
             }
             else
             {
@@ -1238,7 +1425,7 @@ namespace ClearVestige
                 return;
             }
 
-            var app = _gridApps.SelectedItem as InstalledApp;
+            var app = selectedApps.Count == 1 ? selectedApps[0] : (_gridApps.SelectedItem as InstalledApp);
             if (app == null) return;
 
             var wizard = new UninstallWizardWindow(app, _allApps, skipOfficialUninstaller, preferSilent)
@@ -1506,7 +1693,7 @@ namespace ClearVestige
             parentGrid.Children.Add(border);
         }
 
-        private void AddCategoryFilterButton(Panel parent, string text, string tag, bool isActive)
+        private Button AddCategoryFilterButton(Panel parent, string text, string tag, bool isActive)
         {
             var btn = new Button
             {
@@ -1538,6 +1725,7 @@ namespace ClearVestige
 
             _filterButtons.Add(btn);
             parent.Children.Add(btn);
+            return btn;
         }
 
         private static TabItem CreateTabItem(string header, UIElement content)
