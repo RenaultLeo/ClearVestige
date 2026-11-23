@@ -262,12 +262,7 @@ namespace ClearVestige
 
             _gridLeftovers = CreateDataGrid();
             _gridLeftovers.ItemsSource = _leftovers;
-            _gridLeftovers.Columns.Add(new DataGridCheckBoxColumn
-            {
-                Header = "Choix",
-                Binding = new Binding("IsSelected") { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
-                Width = new DataGridLength(52)
-            });
+            _gridLeftovers.Columns.Add(UiTheme.CreateSingleClickCheckBoxColumn(Loc.T("Choix", "Pick"), "IsSelected", 52));
             _gridLeftovers.Columns.Add(new DataGridTextColumn { Header = "Application", Binding = new Binding("OwnerAppName"), IsReadOnly = true, Width = new DataGridLength(130), ElementStyle = UiTheme.CreateCellTextTooltipStyle("OwnerAppName") });
             _gridLeftovers.Columns.Add(new DataGridTextColumn { Header = "Type", Binding = new Binding("TypeLabel"), IsReadOnly = true, Width = new DataGridLength(95) });
             _gridLeftovers.Columns.Add(new DataGridTextColumn { Header = "Catégorie", Binding = new Binding("Category"), IsReadOnly = true, Width = new DataGridLength(145), ElementStyle = UiTheme.CreateCellTextTooltipStyle("Category") });

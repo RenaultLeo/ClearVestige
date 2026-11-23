@@ -95,12 +95,7 @@ namespace ClearVestige
 
             _gridOrphanServices = CreateStyledDataGrid();
             _gridOrphanServices.ItemsSource = _orphanServices;
-            _gridOrphanServices.Columns.Add(new DataGridCheckBoxColumn
-            {
-                Header = Loc.T("Choix", "Pick"),
-                Binding = new Binding("IsSelected") { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
-                Width = new DataGridLength(55)
-            });
+            _gridOrphanServices.Columns.Add(UiTheme.CreateSingleClickCheckBoxColumn(Loc.T("Choix", "Pick"), "IsSelected", 55));
             _gridOrphanServices.Columns.Add(new DataGridTextColumn { Header = Loc.T("Nom Service", "Service Name"), Binding = new Binding("ServiceName"), Width = new DataGridLength(170), IsReadOnly = true, ElementStyle = UiTheme.CreateCellTextTooltipStyle("ServiceName") });
             _gridOrphanServices.Columns.Add(new DataGridTextColumn { Header = Loc.T("Nom affiché", "Display Name"), Binding = new Binding("DisplayName"), Width = new DataGridLength(1.2, DataGridLengthUnitType.Star), IsReadOnly = true, ElementStyle = UiTheme.CreateCellTextTooltipStyle("DisplayName") });
             _gridOrphanServices.Columns.Add(new DataGridTextColumn { Header = Loc.T("Exécutable manquant", "Missing Executable"), Binding = new Binding("ResolvedExe"), Width = new DataGridLength(1.8, DataGridLengthUnitType.Star), MinWidth = 220, IsReadOnly = true, ElementStyle = UiTheme.CreateCellTextTooltipStyle("ImagePath") });
@@ -208,12 +203,7 @@ namespace ClearVestige
 
             _gridContextMenu = CreateStyledDataGrid();
             _gridContextMenu.ItemsSource = _contextMenuEntries;
-            _gridContextMenu.Columns.Add(new DataGridCheckBoxColumn
-            {
-                Header = Loc.T("Choix", "Pick"),
-                Binding = new Binding("IsSelected") { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
-                Width = new DataGridLength(55)
-            });
+            _gridContextMenu.Columns.Add(UiTheme.CreateSingleClickCheckBoxColumn(Loc.T("Choix", "Pick"), "IsSelected", 55));
             _gridContextMenu.Columns.Add(new DataGridTextColumn { Header = Loc.T("Intitulé", "Label"), Binding = new Binding("Name"), Width = new DataGridLength(170), IsReadOnly = true, ElementStyle = UiTheme.CreateCellTextTooltipStyle("Name") });
             _gridContextMenu.Columns.Add(new DataGridTextColumn { Header = Loc.T("Zone", "Scope"), Binding = new Binding("ScopeLabel"), Width = new DataGridLength(145), IsReadOnly = true });
             _gridContextMenu.Columns.Add(new DataGridTextColumn { Header = Loc.T("État", "Status"), Binding = new Binding("StatusLabel"), Width = new DataGridLength(190), IsReadOnly = true });
@@ -367,12 +357,7 @@ namespace ClearVestige
 
             _gridSnapshotDiff = CreateStyledDataGrid();
             _gridSnapshotDiff.ItemsSource = _snapshotDiffItems;
-            _gridSnapshotDiff.Columns.Add(new DataGridCheckBoxColumn
-            {
-                Header = Loc.T("Choix", "Pick"),
-                Binding = new Binding("IsSelected") { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
-                Width = new DataGridLength(55)
-            });
+            _gridSnapshotDiff.Columns.Add(UiTheme.CreateSingleClickCheckBoxColumn(Loc.T("Choix", "Pick"), "IsSelected", 55));
             _gridSnapshotDiff.Columns.Add(new DataGridTextColumn { Header = Loc.T("Type", "Type"), Binding = new Binding("TypeLabel"), Width = new DataGridLength(115), IsReadOnly = true });
             _gridSnapshotDiff.Columns.Add(new DataGridTextColumn { Header = Loc.T("Catégorie", "Category"), Binding = new Binding("Category"), Width = new DataGridLength(180), IsReadOnly = true, ElementStyle = UiTheme.CreateCellTextTooltipStyle("Category") });
             _gridSnapshotDiff.Columns.Add(new DataGridTextColumn { Header = Loc.T("Élément ajouté depuis le Snapshot", "Added Since Snapshot"), Binding = new Binding("DisplayPath"), Width = new DataGridLength(2.2, DataGridLengthUnitType.Star), MinWidth = 260, IsReadOnly = true, ElementStyle = UiTheme.CreateCellTextTooltipStyle("FullTooltip") });
@@ -699,11 +684,58 @@ namespace ClearVestige
 
         private void OnToggleLanguageClick(object sender, RoutedEventArgs e)
         {
+            if (_chromeFrameBorder == null) return;
+
+            // Mémoriser l'état complet de l'interface pour basculer FR <-> EN sur place sans fermer la fenêtre
+            int activeTab = _mainTabControl != null ? _mainTabControl.SelectedIndex : 0;
+            string searchText = _txtSearch != null ? _txtSearch.Text : "";
+            bool includeStore = _cbIncludeStore != null && _cbIncludeStore.IsChecked == true;
+            bool includeSystem = _cbIncludeSystem != null && _cbIncludeSystem.IsChecked == true;
+            string forcedName = _txtForcedName != null ? _txtForcedName.Text : "";
+            string forcedPath = _txtForcedPath != null ? _txtForcedPath.Text : "";
+            string junkSummary = _txtJunkSummary != null ? _txtJunkSummary.Text : "";
+            string startupCount = _lblStartupCount != null ? _lblStartupCount.Text : "0";
+
             Loc.ToggleLanguage();
-            var next = new MainWindow();
-            Application.Current.MainWindow = next;
-            next.Show();
-            Close();
+
+            _isRebuildingUi = true;
+            try
+            {
+                Title = Loc.T("ClearVestige v2.0 — Désinstallateur Complet & Nettoyeur de Résidus",
+                              "ClearVestige v2.0 — Deep Uninstaller & Leftover Cleaner");
+
+                _chromeFrameBorder.Child = BuildMainOuterGrid();
+
+                if (_cbIncludeStore != null) _cbIncludeStore.IsChecked = includeStore;
+                if (_cbIncludeSystem != null) _cbIncludeSystem.IsChecked = includeSystem;
+                if (_txtSearch != null) _txtSearch.Text = searchText;
+                if (_txtForcedName != null) _txtForcedName.Text = forcedName;
+                if (_txtForcedPath != null) _txtForcedPath.Text = forcedPath;
+                if (_txtJunkSummary != null && !string.IsNullOrWhiteSpace(junkSummary)) _txtJunkSummary.Text = junkSummary;
+                if (_lblStartupCount != null) _lblStartupCount.Text = startupCount;
+
+                // Restaurer l'onglet actif et le bouton de filtre actif
+                if (_mainTabControl != null && activeTab >= 0 && activeTab < _mainTabControl.Items.Count)
+                    _mainTabControl.SelectedIndex = activeTab;
+
+                foreach (var b in _filterButtons)
+                {
+                    bool active = (string)b.Tag == _activeFilterTag;
+                    b.Background = active ? BrushFromHex("#2563EB") : BrushFromHex("#1E293B");
+                    b.Foreground = active ? Brushes.White : BrushFromHex("#CBD5E1");
+                    b.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
+                }
+            }
+            finally
+            {
+                _isRebuildingUi = false;
+            }
+
+            ApplyAppFilters();
+            UpdateCheckedAppsUI();
+            if (_forcedLeftovers.Count > 0) UpdateForcedCounters();
+            if (_autoOrphans.Count > 0) UpdateAutoOrphansCounters();
+            RefreshHistoryAndBackups();
         }
 
         private void OnWindowDragOver(object sender, DragEventArgs e)

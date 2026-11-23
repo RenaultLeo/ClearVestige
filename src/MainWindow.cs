@@ -26,6 +26,8 @@ namespace ClearVestige
 
         private string _activeFilterTag = "ALL";
         private TabControl _mainTabControl;
+        private Border _chromeFrameBorder;
+        private bool _isRebuildingUi;
 
         // Contrôles Tableau de bord
         private TextBlock _lblHeaderSubtitle;
@@ -91,6 +93,14 @@ namespace ClearVestige
             AllowDrop = true;
             PreviewDragOver += OnWindowDragOver;
             Drop += OnWindowDrop;
+
+            _chromeFrameBorder = UiTheme.ConfigureCustomChrome(this, 64, BuildMainOuterGrid(), true);
+            Content = _chromeFrameBorder;
+        }
+
+        private Grid BuildMainOuterGrid()
+        {
+            _filterButtons.Clear();
 
             // Grille externe : Ligne 0 = Barre de titre sombre intégrée (style SysPulse), Ligne 1 = Contenu principal
             var outerGrid = new Grid();
@@ -311,12 +321,12 @@ namespace ClearVestige
             _lblTotalApps = new TextBlock { Text = "...", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = BrushFromHex("#38BDF8") };
             _lblTotalSize = new TextBlock { Text = "...", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = BrushFromHex("#A78BFA") };
             _lblStartupCount = new TextBlock { Text = "...", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = BrushFromHex("#34D399") };
-            var lblProtectionMode = new TextBlock { Text = "Actif (Auto .reg + Corbeille)", FontSize = 16, FontWeight = FontWeights.Bold, Foreground = BrushFromHex("#FBBF24"), Margin = new Thickness(0, 4, 0, 0) };
+            var lblProtectionMode = new TextBlock { Text = Loc.T("Actif (Auto .reg + Corbeille)", "Active (Auto .reg + Recycle Bin)"), FontSize = 16, FontWeight = FontWeights.Bold, Foreground = BrushFromHex("#FBBF24"), Margin = new Thickness(0, 4, 0, 0) };
 
-            AddStatCard(cardsGrid, 0, "APPLICATIONS AFFICHÉES", _lblTotalApps);
-            AddStatCard(cardsGrid, 2, "ESPACE OCCUPÉ ESTIMÉ", _lblTotalSize);
-            AddStatCard(cardsGrid, 4, "PROGRAMMES AU DÉMARRAGE", _lblStartupCount);
-            AddStatCard(cardsGrid, 6, "BOUCLIER DE PROTECTION", lblProtectionMode);
+            AddStatCard(cardsGrid, 0, Loc.T("APPLICATIONS AFFICHÉES", "DISPLAYED APPS"), _lblTotalApps);
+            AddStatCard(cardsGrid, 2, Loc.T("ESPACE OCCUPÉ ESTIMÉ", "ESTIMATED DISK USAGE"), _lblTotalSize);
+            AddStatCard(cardsGrid, 4, Loc.T("PROGRAMMES AU DÉMARRAGE", "STARTUP PROGRAMS"), _lblStartupCount);
+            AddStatCard(cardsGrid, 6, Loc.T("BOUCLIER DE PROTECTION", "PROTECTION SHIELD"), lblProtectionMode);
 
             topStack.Children.Add(cardsGrid);
             Grid.SetRow(topStack, 0);
@@ -387,7 +397,7 @@ namespace ClearVestige
             Grid.SetRow(rootGrid, 1);
             outerGrid.Children.Add(rootGrid);
 
-            Content = UiTheme.ConfigureCustomChrome(this, 64, outerGrid, true);
+            return outerGrid;
         }
 
         // =========================================================================
@@ -430,37 +440,37 @@ namespace ClearVestige
                 FontSize = 13,
                 VerticalContentAlignment = VerticalAlignment.Center
             };
-            _txtSearch.TextChanged += (s, e) => ApplyAppFilters();
+            _txtSearch.TextChanged += (s, e) => { if (!_isRebuildingUi) ApplyAppFilters(); };
             searchInner.Children.Add(_txtSearch);
             searchBorder.Child = searchInner;
             DockPanel.SetDock(searchBorder, Dock.Left);
             searchDock.Children.Add(searchBorder);
 
-            var btnClearSearch = CreateSmallPillButton("Effacer", (s, e) => _txtSearch.Text = "");
+            var btnClearSearch = CreateSmallPillButton(Loc.T("Effacer", "Clear"), (s, e) => _txtSearch.Text = "");
             btnClearSearch.Margin = new Thickness(8, 0, 16, 0);
             DockPanel.SetDock(btnClearSearch, Dock.Left);
             searchDock.Children.Add(btnClearSearch);
 
             _cbIncludeStore = new CheckBox
             {
-                Content = "Inclure Microsoft Store",
+                Content = Loc.T("Inclure Microsoft Store", "Include Microsoft Store"),
                 Foreground = BrushFromHex("#CBD5E1"),
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 16, 0)
             };
-            _cbIncludeStore.Checked += async (s, e) => await RefreshAppsOnlyAsync();
-            _cbIncludeStore.Unchecked += async (s, e) => await RefreshAppsOnlyAsync();
+            _cbIncludeStore.Checked += async (s, e) => { if (!_isRebuildingUi) await RefreshAppsOnlyAsync(); };
+            _cbIncludeStore.Unchecked += async (s, e) => { if (!_isRebuildingUi) await RefreshAppsOnlyAsync(); };
             DockPanel.SetDock(_cbIncludeStore, Dock.Left);
             searchDock.Children.Add(_cbIncludeStore);
 
             _cbIncludeSystem = new CheckBox
             {
-                Content = "Inclure composants système",
+                Content = Loc.T("Inclure composants système", "Include System Components"),
                 Foreground = BrushFromHex("#CBD5E1"),
                 VerticalAlignment = VerticalAlignment.Center
             };
-            _cbIncludeSystem.Checked += async (s, e) => await RefreshAppsOnlyAsync();
-            _cbIncludeSystem.Unchecked += async (s, e) => await RefreshAppsOnlyAsync();
+            _cbIncludeSystem.Checked += async (s, e) => { if (!_isRebuildingUi) await RefreshAppsOnlyAsync(); };
+            _cbIncludeSystem.Unchecked += async (s, e) => { if (!_isRebuildingUi) await RefreshAppsOnlyAsync(); };
             DockPanel.SetDock(_cbIncludeSystem, Dock.Left);
             searchDock.Children.Add(_cbIncludeSystem);
 
@@ -533,14 +543,13 @@ namespace ClearVestige
             _gridApps.SelectionMode = DataGridSelectionMode.Extended;
             _gridApps.ItemsSource = _filteredApps;
             _gridApps.SelectionChanged += OnSelectedAppChanged;
-            _gridApps.MouseDoubleClick += (s, e) => OpenUninstallWizardForSelected(false, false);
-
-            _gridApps.Columns.Add(new DataGridCheckBoxColumn
+            _gridApps.MouseDoubleClick += (s, e) =>
             {
-                Header = Loc.T("Choix", "Pick"),
-                Binding = new Binding("IsChecked") { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
-                Width = new DataGridLength(52)
-            });
+                if (!UiTheme.IsClickInsideCheckBox(e.OriginalSource))
+                    OpenUninstallWizardForSelected(false, false);
+            };
+
+            _gridApps.Columns.Add(UiTheme.CreateSingleClickCheckBoxColumn(Loc.T("Choix", "Pick"), "IsChecked", 52));
 
             // Colonne Nom + Icône réelle de l'application (20x20)
             var nameWithIconTemplate = (DataTemplate)System.Windows.Markup.XamlReader.Parse(@"
@@ -562,7 +571,7 @@ namespace ClearVestige
             });
             _gridApps.Columns.Add(new DataGridTextColumn
             {
-                Header = "Éditeur",
+                Header = Loc.T("Éditeur", "Publisher"),
                 Binding = new Binding("Publisher"),
                 Width = new DataGridLength(1.3, DataGridLengthUnitType.Star),
                 IsReadOnly = true,
@@ -577,7 +586,7 @@ namespace ClearVestige
             });
             _gridApps.Columns.Add(new DataGridTextColumn
             {
-                Header = "Taille",
+                Header = Loc.T("Taille", "Size"),
                 Binding = new Binding("SizeFormatted"),
                 SortMemberPath = "SizeBytes",
                 Width = new DataGridLength(100),
@@ -585,7 +594,7 @@ namespace ClearVestige
             });
             _gridApps.Columns.Add(new DataGridTextColumn
             {
-                Header = "Installée le",
+                Header = Loc.T("Installée le", "Installed"),
                 Binding = new Binding("InstallDateFormatted"),
                 SortMemberPath = "InstallDateParsed",
                 Width = new DataGridLength(105),
@@ -593,14 +602,14 @@ namespace ClearVestige
             });
             _gridApps.Columns.Add(new DataGridTextColumn
             {
-                Header = "Portée",
+                Header = Loc.T("Portée", "Scope"),
                 Binding = new Binding("ScopeLabel"),
                 Width = new DataGridLength(125),
                 IsReadOnly = true
             });
             _gridApps.Columns.Add(new DataGridTextColumn
             {
-                Header = "Dossier d'installation",
+                Header = Loc.T("Dossier d'installation", "Install Location"),
                 Binding = new Binding("InstallLocation"),
                 Width = new DataGridLength(1.8, DataGridLengthUnitType.Star),
                 MinWidth = 220,
@@ -649,12 +658,12 @@ namespace ClearVestige
             _btnUninstallSilent.IsEnabled = false;
             _btnUninstallSilent.Click += (s, e) => OpenUninstallWizardForSelected(false, true);
 
-            _btnScanLeftoversOnly = CreateActionButton("🔍 Scanner Résidus Seuls", "#475569", "#FFFFFF");
+            _btnScanLeftoversOnly = CreateActionButton(Loc.T("🔍 Scanner Résidus Seuls", "🔍 Scan Leftovers Only"), "#475569", "#FFFFFF");
             _btnScanLeftoversOnly.Margin = new Thickness(0, 0, 10, 0);
             _btnScanLeftoversOnly.IsEnabled = false;
             _btnScanLeftoversOnly.Click += (s, e) => OpenUninstallWizardForSelected(true, false);
 
-            _btnOpenFolder = CreateActionButton("📂 Ouvrir Dossier", "#334155", "#E2E8F0");
+            _btnOpenFolder = CreateActionButton(Loc.T("📂 Ouvrir Dossier", "📂 Open Folder"), "#334155", "#E2E8F0");
             _btnOpenFolder.IsEnabled = false;
             _btnOpenFolder.Click += (s, e) => OpenSelectedAppFolder();
 
@@ -871,12 +880,7 @@ namespace ClearVestige
             // Grille des résultats forcés
             _gridForcedLeftovers = CreateStyledDataGrid();
             _gridForcedLeftovers.ItemsSource = _forcedLeftovers;
-            _gridForcedLeftovers.Columns.Add(new DataGridCheckBoxColumn
-            {
-                Header = "Choix",
-                Binding = new Binding("IsSelected") { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
-                Width = new DataGridLength(60)
-            });
+            _gridForcedLeftovers.Columns.Add(UiTheme.CreateSingleClickCheckBoxColumn(Loc.T("Choix", "Pick"), "IsSelected", 56));
             _gridForcedLeftovers.Columns.Add(new DataGridTextColumn { Header = "Type", Binding = new Binding("TypeLabel"), Width = new DataGridLength(110), IsReadOnly = true });
             _gridForcedLeftovers.Columns.Add(new DataGridTextColumn { Header = "Catégorie", Binding = new Binding("Category"), Width = new DataGridLength(180), IsReadOnly = true, ElementStyle = UiTheme.CreateCellTextTooltipStyle("Category") });
             _gridForcedLeftovers.Columns.Add(new DataGridTextColumn { Header = "Chemin / Clé de Registre", Binding = new Binding("DisplayPath"), Width = new DataGridLength(2.2, DataGridLengthUnitType.Star), MinWidth = 260, IsReadOnly = true, ElementStyle = UiTheme.CreateCellTextTooltipStyle("FullTooltip") });
@@ -977,12 +981,7 @@ namespace ClearVestige
             // Grille des orphelins auto
             _gridAutoOrphans = CreateStyledDataGrid();
             _gridAutoOrphans.ItemsSource = _autoOrphans;
-            _gridAutoOrphans.Columns.Add(new DataGridCheckBoxColumn
-            {
-                Header = "Choix",
-                Binding = new Binding("IsSelected") { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
-                Width = new DataGridLength(60)
-            });
+            _gridAutoOrphans.Columns.Add(UiTheme.CreateSingleClickCheckBoxColumn(Loc.T("Choix", "Pick"), "IsSelected", 56));
             _gridAutoOrphans.Columns.Add(new DataGridTextColumn { Header = "Nom / Élément", Binding = new Binding("Name"), Width = new DataGridLength(170), IsReadOnly = true, ElementStyle = UiTheme.CreateCellTextTooltipStyle("Name") });
             _gridAutoOrphans.Columns.Add(new DataGridTextColumn { Header = "Emplacement", Binding = new Binding("Category"), Width = new DataGridLength(175), IsReadOnly = true, ElementStyle = UiTheme.CreateCellTextTooltipStyle("Category") });
             _gridAutoOrphans.Columns.Add(new DataGridTextColumn { Header = "Chemin Disque ou Registre", Binding = new Binding("Path"), Width = new DataGridLength(2.2, DataGridLengthUnitType.Star), MinWidth = 260, IsReadOnly = true, ElementStyle = UiTheme.CreateCellTextTooltipStyle("Path") });
@@ -1156,12 +1155,7 @@ namespace ClearVestige
 
             _gridJunk = CreateStyledDataGrid();
             _gridJunk.ItemsSource = _junkCategories;
-            _gridJunk.Columns.Add(new DataGridCheckBoxColumn
-            {
-                Header = "Inclure",
-                Binding = new Binding("IsSelected") { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
-                Width = new DataGridLength(65)
-            });
+            _gridJunk.Columns.Add(UiTheme.CreateSingleClickCheckBoxColumn(Loc.T("Inclure", "Include"), "IsSelected", 65));
             _gridJunk.Columns.Add(new DataGridTextColumn { Header = "Catégorie", Binding = new Binding("Name"), Width = new DataGridLength(280), IsReadOnly = true });
             _gridJunk.Columns.Add(new DataGridTextColumn { Header = "Dossier", Binding = new Binding("FolderPath"), Width = new DataGridLength(1, DataGridLengthUnitType.Star), IsReadOnly = true });
             _gridJunk.Columns.Add(new DataGridTextColumn { Header = "Fichiers", Binding = new Binding("FileCount"), Width = new DataGridLength(90), IsReadOnly = true });

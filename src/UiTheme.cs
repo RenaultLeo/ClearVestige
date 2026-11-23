@@ -121,6 +121,42 @@ namespace ClearVestige
         }
 
         /// <summary>
+        /// Crée une colonne de cases à cocher réactive en 1 seul clic (remplace DataGridCheckBoxColumn qui exige 2 clics en WPF).
+        /// </summary>
+        public static DataGridTemplateColumn CreateSingleClickCheckBoxColumn(string header, string bindingProperty, double width)
+        {
+            string xaml = string.Format(
+                "<DataTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'>" +
+                "<CheckBox IsChecked='{{Binding {0}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}}' " +
+                "HorizontalAlignment='Center' VerticalAlignment='Center' Cursor='Hand' Focusable='False'/>" +
+                "</DataTemplate>",
+                bindingProperty);
+
+            return new DataGridTemplateColumn
+            {
+                Header = header,
+                CellTemplate = (DataTemplate)XamlReader.Parse(xaml),
+                SortMemberPath = bindingProperty,
+                Width = new DataGridLength(width),
+                CanUserResize = false
+            };
+        }
+
+        /// <summary>
+        /// Indique si un clic souris provient d'une CheckBox (pour éviter qu'un double-clic rapide sur des cases lance le double-clic de la ligne).
+        /// </summary>
+        public static bool IsClickInsideCheckBox(object originalSource)
+        {
+            var dep = originalSource as DependencyObject;
+            while (dep != null)
+            {
+                if (dep is CheckBox) return true;
+                dep = VisualTreeHelper.GetParent(dep);
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Configure une barre de titre sombre personnalisée (style SysPulse) via WPF WindowChrome
         /// tout en conservant le redimensionnement, Aero Snap et le comportement Maximisé natif Windows.
         /// </summary>

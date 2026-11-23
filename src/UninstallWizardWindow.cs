@@ -653,12 +653,7 @@ namespace ClearVestige
                 FontSize = 12.5
             };
 
-            grid.Columns.Add(new DataGridCheckBoxColumn
-            {
-                Header = "Choix",
-                Binding = new Binding("IsSelected") { UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged },
-                Width = new DataGridLength(55)
-            });
+            grid.Columns.Add(UiTheme.CreateSingleClickCheckBoxColumn(Loc.T("Choix", "Pick"), "IsSelected", 55));
 
             grid.Columns.Add(new DataGridTextColumn
             {
